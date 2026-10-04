@@ -238,6 +238,7 @@ nav button{font-size:.78rem}
 .fchip.kt-snel.on{background:var(--ok);border-color:var(--ok)}.fchip.kt-medium.on{background:var(--warn);border-color:var(--warn)}.fchip.kt-lang.on{background:var(--danger);border-color:var(--danger)}
 .fchip.clear{border-style:dashed}
 .picklist{max-height:55vh;overflow:auto}
+.picklist .item{min-height:46px;padding:8px 12px}
 .picklist .listhead{position:sticky;top:0;background:var(--surface);z-index:1}
 .picklist .item.picked{background:var(--accent-soft,rgba(31,74,168,.1))}
 .picklist .item.picked .chev{color:var(--accent);font-weight:700}
@@ -295,7 +296,7 @@ function filterBar(scope,f){
   return `<div class="filters" role="group" aria-label="Filter op kenmerken">${FILTERS.map(([v,l])=>`<button type="button" class="fchip${f.on.has(v)?" on":""}${KTL[v]?" kt-"+v:""}" data-act="filt" data-scope="${scope}" data-v="${v}" aria-pressed="${f.on.has(v)}">${l}</button>`).join("")}${f.on.size?`<button type="button" class="fchip clear" data-act="filtclear" data-scope="${scope}">Wis filters</button>`:""}</div>`;
 }
 function listHead(trash){return `<div class="listhead" aria-hidden="true"><span>Gerecht</span><span class="cols"><span>Tijd</span><span>Kind</span><span>Peul</span><span>Vries</span></span><span class="chev"></span>${trash?'<span class="trashsp"></span>':""}</div>`}
-function itemText(m){return `<span class="itemtext"><strong>${esc(m.name)}</strong><span class="sub">${m.ingredients.length?esc(m.ingredients.slice(0,4).join(", "))+(m.ingredients.length>4?"…":""):"Geen ingrediënten"}</span></span>`}
+function itemText(m,short){return `<span class="itemtext"><strong>${esc(m.name)}</strong>${short?"":`<span class="sub">${m.ingredients.length?esc(m.ingredients.slice(0,4).join(", "))+(m.ingredients.length>4?"…":""):"Geen ingrediënten"}</span>`}</span>`}
 function flagTags(m){return FLAGS.filter(([k])=>m[k]).map(([,l])=>`<span class="tag flag">${l}</span>`).join(" ")}
 const WD = ["zo","ma","di","wo","do","vr","za"];
 const MON = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
@@ -615,7 +616,7 @@ function renderAlt(k){
     return `<div class="alt"><span class="eyebrow">Zelf invullen</span>
       <input type="search" id="self-q-${k}" data-pickq="1" placeholder="Zoek op gerecht of ingrediënt" value="${esc(pickFilter.q)}" aria-label="Zoek een gerecht">
       ${filterBar("pick",pickFilter)}
-      <div class="list picklist" role="listbox" aria-label="Kies een gerecht">${listHead(false)}${list.map(([id,m])=>`<button type="button" class="item${pick===id?" picked":""}" role="option" aria-selected="${pick===id}" data-act="pick" data-k="${k}" data-id="${esc(id)}">${itemText(m)}${propCols(m)}<span class="chev">${pick===id?"✓":""}</span></button>`).join("")||'<p class="notice" style="padding:14px">Niets gevonden met deze filters.</p>'}</div>
+      <div class="list picklist" role="listbox" aria-label="Kies een gerecht">${listHead(false)}${list.map(([id,m])=>`<button type="button" class="item${pick===id?" picked":""}" role="option" aria-selected="${pick===id}" data-act="pick" data-k="${k}" data-id="${esc(id)}">${itemText(m,true)}${propCols(m)}<span class="chev">${pick===id?"✓":""}</span></button>`).join("")||'<p class="notice" style="padding:14px">Niets gevonden met deze filters.</p>'}</div>
       <div class="actions"><button class="okbtn" data-act="selfsave" data-k="${k}" ${busy||!pick?"disabled":""}>${pick?"Kies "+esc(meals.get(pick).name):"Tik eerst een gerecht aan"}</button><button class="ghost" data-act="selfcancel" data-k="${k}">Terug</button></div>
       <span class="sub">Staat het er niet tussen?</span>
       <button data-act="selfnew" data-k="${k}">+ Nieuw gerecht invoeren</button></div>`;
