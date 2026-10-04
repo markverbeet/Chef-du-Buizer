@@ -223,7 +223,7 @@ nav button{font-size:.78rem}
 .cols{display:grid;grid-template-columns:repeat(4,30px);flex:none;align-items:center;justify-items:center}
 .listhead{display:flex;align-items:center;gap:10px;padding:8px 14px 6px;border-bottom:1px solid var(--line);font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;font-weight:700;color:var(--muted)}
 .listhead > span:first-child{flex:1}
-.listhead .chev{width:8px}
+.listhead .chev,.item .chev{width:12px;text-align:center;flex:none}
 .listhead .cols{font-size:.6rem;letter-spacing:0;text-transform:none}
 .listhead .trashsp{width:56px;margin-right:-14px}
 .item .itemtext{flex:1;min-width:0}
@@ -232,6 +232,16 @@ nav button{font-size:.78rem}
 .kt.kt-snel{color:var(--ok)}.kt.kt-medium{color:var(--warn)}.kt.kt-lang{color:var(--danger)}.kt.none{border:0;color:var(--muted)}
 .dot{display:block;box-sizing:border-box;width:12px;height:12px;border-radius:50%;border:1.5px solid var(--line)}
 .dot.on{border:0;background:var(--accent)}
+.filters{display:flex;flex-wrap:wrap;gap:6px}
+.fchip{min-height:34px;padding:0 12px;border-radius:999px;font-size:.85rem;font-weight:600;border:1.5px solid var(--line);background:var(--surface);color:var(--muted)}
+.fchip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.fchip.kt-snel.on{background:var(--ok);border-color:var(--ok)}.fchip.kt-medium.on{background:var(--warn);border-color:var(--warn)}.fchip.kt-lang.on{background:var(--danger);border-color:var(--danger)}
+.fchip.clear{border-style:dashed}
+.picklist{max-height:55vh;overflow:auto}
+.picklist .listhead{position:sticky;top:0;background:var(--surface);z-index:1}
+.picklist .item.picked{background:var(--accent-soft,rgba(31,74,168,.1))}
+.picklist .item.picked .chev{color:var(--accent);font-weight:700}
+.alt input[type=search]{width:100%}
 .confirmdel{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 @media (prefers-reduced-motion:no-preference){.day{transition:border-color .2s, box-shadow .2s}}
 </style>
@@ -259,16 +269,33 @@ nav button{font-size:.78rem}
 
 <script>
 (function(){
-const DAYS = 5;
+const DAYS = 6;
 const KT = [["snel","Snel","tot 20 minuten"],["medium","Medium","20 tot 45 minuten"],["lang","Lang","meer dan 45 minuten"]];
 const KTL = {snel:"Snel",medium:"Medium",lang:"Lang"};
 const FLAGS = [["kind","Kindvriendelijk"],["peul","Bevat peulvruchten"],["vries","Invriesbaar"]];
+const FILTERS = [["snel","Snel"],["medium","Medium"],["lang","Lang"],["kind","Kindvriendelijk"],["peul","Peulvruchten"],["vries","Invriesbaar"]];
+const mealFilter = {q:"",on:new Set()}, pickFilter = {q:"",on:new Set()}, selfPick = {};
+// Elk voorstel bevat minstens 1 kindvriendelijk, 1 invriesbaar en 1 gerecht met peulvruchten
+const MIX = [["kind","kindvriendelijk gerecht"],["vries","invriesbaar gerecht"],["peul","gerecht met peulvruchten"]];
 function propCols(m){
   const cells=[m.kooktijd?`<span class="kt kt-${m.kooktijd}" title="${KTL[m.kooktijd]}">${KTL[m.kooktijd][0]}</span>`:'<span class="kt none">–</span>',
     ...FLAGS.map(([k,l])=>`<span class="dot${m[k]?" on":""}" title="${l}: ${m[k]?"ja":"nee"}"></span>`)];
   const sr=[m.kooktijd?"kooktijd "+KTL[m.kooktijd].toLowerCase():"",...FLAGS.filter(([k])=>m[k]).map(([,l])=>l.toLowerCase())].filter(Boolean).join(", ");
   return `<span class="cols" role="img" aria-label="${sr||"geen kenmerken"}">${cells.map(c=>`<span>${c}</span>`).join("")}</span>`;
 }
+function matchMeal(m,f){
+  const q=f.q.trim().toLowerCase();
+  if(q&&!m.name.toLowerCase().includes(q)&&!m.ingredients.some(i=>i.toLowerCase().includes(q)))return false;
+  const kts=KT.map(([v])=>v).filter(v=>f.on.has(v));
+  if(kts.length&&!kts.includes(m.kooktijd))return false;
+  for(const [k] of FLAGS)if(f.on.has(k)&&!m[k])return false;
+  return true;
+}
+function filterBar(scope,f){
+  return `<div class="filters" role="group" aria-label="Filter op kenmerken">${FILTERS.map(([v,l])=>`<button type="button" class="fchip${f.on.has(v)?" on":""}${KTL[v]?" kt-"+v:""}" data-act="filt" data-scope="${scope}" data-v="${v}" aria-pressed="${f.on.has(v)}">${l}</button>`).join("")}${f.on.size?`<button type="button" class="fchip clear" data-act="filtclear" data-scope="${scope}">Wis filters</button>`:""}</div>`;
+}
+function listHead(trash){return `<div class="listhead" aria-hidden="true"><span>Gerecht</span><span class="cols"><span>Tijd</span><span>Kind</span><span>Peul</span><span>Vries</span></span><span class="chev"></span>${trash?'<span class="trashsp"></span>':""}</div>`}
+function itemText(m){return `<span class="itemtext"><strong>${esc(m.name)}</strong><span class="sub">${m.ingredients.length?esc(m.ingredients.slice(0,4).join(", "))+(m.ingredients.length>4?"…":""):"Geen ingrediënten"}</span></span>`}
 function flagTags(m){return FLAGS.filter(([k])=>m[k]).map(([,l])=>`<span class="tag flag">${l}</span>`).join(" ")}
 const WD = ["zo","ma","di","wo","do","vr","za"];
 const MON = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
@@ -288,7 +315,7 @@ const meals = new Map();   // id -> {name, ingredients[], note}
 const plan = new Map();    // yyyy-mm-dd -> {mealId, mealName, status, by, at}
 let mealsLoaded=false, planLoaded=false, live=false;
 let delConfirm = null, undoConfirm = null; // undoConfirm: {k, next}
-let view = "week", editing = null, mealQuery = "", confirmDelete = false;
+let view = "week", editing = null, confirmDelete = false;
 const names = {};
 
 function pad(n){return String(n).padStart(2,"0")}
@@ -307,9 +334,10 @@ async function resolveNames(ids){
 }
 
 // Kies een gerecht: niet al in de planning van deze dagen, voorkeur voor lang niet gegeten
-function pickMeal(dateKey, excludeIds){
+function pickMeal(dateKey, excludeIds, need){
   const all=[...meals.keys()];if(!all.length)return null;
   let pool=all.filter(id=>!excludeIds.has(id));if(!pool.length)pool=all;
+  if(need&&need.length){const fit=pool.filter(id=>need.some(f=>meals.get(id)[f]));if(fit.length)pool=fit}
   const target=new Date(dateKey+"T12:00:00");
   const weights=pool.map(id=>{
     let last=null;
@@ -321,6 +349,8 @@ function pickMeal(dateKey, excludeIds){
   for(let i=0;i<pool.length;i++){r-=weights[i];if(r<=0)return pool[i]}
   return pool[pool.length-1];
 }
+function coveredFlags(exceptKey){const s=new Set();for(const d of windowDays()){const k=key(d);if(k===exceptKey)continue;const p=plan.get(k);if(!p||p.status==="nee"||!p.mealId)continue;const m=meals.get(p.mealId);if(m)for(const [f] of MIX)if(m[f])s.add(f)}return s}
+function neededFlags(exceptKey){const c=coveredFlags(exceptKey);return MIX.map(([f])=>f).filter(f=>!c.has(f)&&[...meals.values()].some(m=>m[f]))}
 function usedInWindow(exceptKey){const s=new Set();for(const d of windowDays()){const k=key(d);if(k===exceptKey)continue;const p=plan.get(k);if(p&&p.mealId)s.add(p.mealId)}return s}
 
 let busy=false;
@@ -331,9 +361,10 @@ async function guard(fn){if(busy||!db)return;busy=true;render();try{await fn()}c
 }finally{busy=false;render()}}
 
 function propose(k){return guard(async()=>{
-  const id=pickMeal(k,usedInWindow(k));if(!id)return;
+  const need=neededFlags(k);
+  const id=pickMeal(k,usedInWindow(k),need);if(!id)return;
   const cur=plan.get(k);
-  if(cur&&cur.mealId===id&&meals.size>1){const alt=pickMeal(k,new Set([...usedInWindow(k),id]));if(alt)return setPlan(k,alt,"voorstel")}
+  if(cur&&cur.mealId===id&&meals.size>1){const alt=pickMeal(k,new Set([...usedInWindow(k),id]),need);if(alt)return setPlan(k,alt,"voorstel")}
   await setPlan(k,id,"voorstel");
 })}
 async function setPlan(k,mealId,status){
@@ -398,13 +429,29 @@ let planFor=null; // dag waarvoor het formulier een nieuw gerecht invult
 let autoBusy=false;
 async function autoFill(){
   if(autoBusy||!db||!canWrite||!meals.size||!mealsLoaded||!planLoaded)return;
-  const missing=windowDays().map(key).filter(k=>!plan.get(k));if(!missing.length)return;
+  const missing=windowDays().map(key).filter(k=>!plan.get(k)).sort(()=>Math.random()-.5);
+  if(!missing.length&&!neededFlags(null).length)return;
   autoBusy=true;
   try{for(const k of missing){
     const snap=await db.doc("plan/"+k).get();
     if(snap.exists){plan.set(k,snap.data());continue}
-    const id=pickMeal(k,usedInWindow(k));if(id)await setPlan(k,id,"voorstel");
-  }}catch(e){}finally{autoBusy=false;render()}
+    const id=pickMeal(k,usedInWindow(k),neededFlags(k));if(id)await setPlan(k,id,"voorstel");
+  }
+  await rebalance();
+  }catch(e){}finally{autoBusy=false;render()}
+}
+// Ontbreekt er een kenmerk, dan wordt het laatste onbevestigde voorstel vervangen
+async function rebalance(){
+  for(let n=0;n<MIX.length;n++){
+    const need=neededFlags(null);if(!need.length)return;
+    const cands=windowDays().map(key).filter(k=>{const p=plan.get(k);if(!p||p.status!=="voorstel"||!p.mealId)return false;
+      const m=meals.get(p.mealId),others=coveredFlags(k);return !(m&&MIX.some(([f])=>m[f]&&!others.has(f)))});
+    if(!cands.length)return;
+    const k=cands[cands.length-1];
+    const id=pickMeal(k,usedInWindow(k),need);const m=id&&meals.get(id);
+    if(!m||!need.some(f=>m[f]))return;
+    await setPlan(k,id,"voorstel");
+  }
 }
 function lastEaten(mealId,before){let last=null;for(const [k,p] of plan){if(p.mealId===mealId&&p.status==="ok"&&k<before&&(!last||k>last))last=k}return last}
 function mealDetails(k,p,m){
@@ -499,8 +546,8 @@ async function xmlCopy(which){
 function planLabel(k){const d=new Date(k+"T12:00:00");return WD[d.getDay()]+" "+d.getDate()+" "+MON[d.getMonth()]}
 function setStatus(k,status){return guard(async()=>{const p=plan.get(k);if(!p)return;await writePlan(k,{...p,status,by:uid||"",at:Date.now()})})}
 function saveSelf(k){
-  const sel=document.getElementById("self-sel-"+k),val=sel&&sel.value;
-  if(!val){toast("Kies een gerecht uit de lijst.");return}
+  const val=selfPick[k];
+  if(!val||!meals.has(val)){toast("Tik eerst een gerecht in de lijst aan.");return}
   return guard(async()=>{
     selfMode.delete(k);
     if(val==="__vrij")await writePlan(k,{mealId:null,mealName:"Vrij / uit eten",status:"ok",by:uid||"",at:Date.now()});
@@ -553,16 +600,23 @@ function renderWeek(el){
       ${canWrite&&no?renderAlt(k):""}
     </article>`;
   });
+  const cov=coveredFlags(null),miss=MIX.filter(([f])=>!cov.has(f));
+  if(miss.length){const none=miss.filter(([f])=>![...meals.values()].some(m=>m[f])),open=miss.filter(x=>!none.includes(x));
+    if(none.length)html+=`<p class="notice">Er staat nog geen ${none.map(([,l])=>l).join(" of ")} in Gerechten. Zet het kenmerk aan bij een gerecht, dan komt er elke keer een in het voorstel.</p>`;
+    if(open.length)html+=`<p class="notice">Nog geen ${open.map(([,l])=>l).join(" en ")} in deze dagen. Wijs een voorstel af en kies er zelf een.</p>`}
   if(!canWrite)html+='<p class="notice">Je kijkt mee. Om dagen te bevestigen of af te wijzen heb je bewerkrechten nodig.</p>';
   el.innerHTML=html;
 }
 function renderAlt(k){
   if(inspo[k])return inspoBox(k);
   if(selfMode.has(k)){
-    const opts='<option value="">Kies uit jullie gerechten…</option>'+sortedMeals().map(([id,mm])=>`<option value="${esc(id)}">${esc(mm.name)}</option>`).join("");
+    const pick=selfPick[k]&&meals.has(selfPick[k])?selfPick[k]:null;
+    const list=sortedMeals().filter(([,m])=>matchMeal(m,pickFilter));
     return `<div class="alt"><span class="eyebrow">Zelf invullen</span>
-      <select id="self-sel-${k}" aria-label="Kies een gerecht">${opts}</select>
-      <div class="actions"><button class="okbtn" data-act="selfsave" data-k="${k}" ${busy?"disabled":""}>Kies deze</button><button class="ghost" data-act="selfcancel" data-k="${k}">Terug</button></div>
+      <input type="search" id="self-q-${k}" data-pickq="1" placeholder="Zoek op gerecht of ingrediënt" value="${esc(pickFilter.q)}" aria-label="Zoek een gerecht">
+      ${filterBar("pick",pickFilter)}
+      <div class="list picklist" role="listbox" aria-label="Kies een gerecht">${listHead(false)}${list.map(([id,m])=>`<button type="button" class="item${pick===id?" picked":""}" role="option" aria-selected="${pick===id}" data-act="pick" data-k="${k}" data-id="${esc(id)}">${itemText(m)}${propCols(m)}<span class="chev">${pick===id?"✓":""}</span></button>`).join("")||'<p class="notice" style="padding:14px">Niets gevonden met deze filters.</p>'}</div>
+      <div class="actions"><button class="okbtn" data-act="selfsave" data-k="${k}" ${busy||!pick?"disabled":""}>${pick?"Kies "+esc(meals.get(pick).name):"Tik eerst een gerecht aan"}</button><button class="ghost" data-act="selfcancel" data-k="${k}">Terug</button></div>
       <span class="sub">Staat het er niet tussen?</span>
       <button data-act="selfnew" data-k="${k}">+ Nieuw gerecht invoeren</button></div>`;
   }
@@ -591,12 +645,13 @@ function renderMeals(el){
     </form>`;
     return;
   }
-  const q=mealQuery.trim().toLowerCase();
-  const list=sortedMeals().filter(([,m])=>!q||m.name.toLowerCase().includes(q)||m.ingredients.some(i=>i.toLowerCase().includes(q)));
-  el.innerHTML=`<div class="row spread"><h2>Gerechten <span class="sub">(${meals.size})</span></h2>${canWrite?'<button class="primary" data-act="newmeal">+ Nieuw</button>':""}</div>
-    ${meals.size>5?`<input type="search" id="mealsearch" placeholder="Zoek op gerecht of ingrediënt" value="${esc(mealQuery)}">`:""}
+  const list=sortedMeals().filter(([,m])=>matchMeal(m,mealFilter));
+  const filtering=mealFilter.on.size||mealFilter.q.trim();
+  el.innerHTML=`<div class="row spread"><h2>Gerechten <span class="sub">(${filtering?list.length+" van "+meals.size:meals.size})</span></h2>${canWrite?'<button class="primary" data-act="newmeal">+ Nieuw</button>':""}</div>
+    ${meals.size>5?`<input type="search" id="mealsearch" placeholder="Zoek op gerecht of ingrediënt" value="${esc(mealFilter.q)}">`:""}
+    ${meals.size?filterBar("meals",mealFilter):""}
     ${!mealsLoaded?'<p class="notice">Laden…</p>':!meals.size?'<div class="empty-state"><p>Nog geen gerechten. Voeg jullie favorieten toe; daaruit komen de voorstellen.</p></div>':
-    `<div class="list"><div class="listhead" aria-hidden="true"><span>Gerecht</span><span class="cols"><span>Tijd</span><span>Kind</span><span>Peul</span><span>Vries</span></span><span class="chev"></span>${canWrite?'<span class="trashsp"></span>':""}</div>${list.map(([id,m])=>delConfirm===id?`<div class="itemrow confirming"><span><strong>Wil je ${esc(m.name)} echt verwijderen?</strong><span class="sub">Het verdwijnt uit Gerechten en uit toekomstige voorstellen.</span></span><span class="confirmdel"><button class="danger" data-act="rowdelyes" data-id="${esc(id)}" ${busy?"disabled":""}>Ja, verwijder</button><button class="ghost" data-act="rowdelno">Nee</button></span></div>`:`<div class="itemrow"><button class="item" data-act="edit" data-id="${esc(id)}"><span class="itemtext"><strong>${esc(m.name)}</strong><span class="sub">${m.ingredients.length?esc(m.ingredients.slice(0,4).join(", "))+(m.ingredients.length>4?"…":""):"Geen ingrediënten"}</span></span>${propCols(m)}<span class="chev">›</span></button>${canWrite?`<button class="trash" data-act="rowdel" data-id="${esc(id)}" aria-label="Verwijder ${esc(m.name)}"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>`:""}</div>`).join("")||'<p class="notice" style="padding:14px">Niets gevonden.</p>'}</div>${exportBar("meals")}`}`;
+    `<div class="list">${listHead(canWrite)}${list.map(([id,m])=>delConfirm===id?`<div class="itemrow confirming"><span><strong>Wil je ${esc(m.name)} echt verwijderen?</strong><span class="sub">Het verdwijnt uit Gerechten en uit toekomstige voorstellen.</span></span><span class="confirmdel"><button class="danger" data-act="rowdelyes" data-id="${esc(id)}" ${busy?"disabled":""}>Ja, verwijder</button><button class="ghost" data-act="rowdelno">Nee</button></span></div>`:`<div class="itemrow"><button class="item" data-act="edit" data-id="${esc(id)}">${itemText(m)}${propCols(m)}<span class="chev">›</span></button>${canWrite?`<button class="trash" data-act="rowdel" data-id="${esc(id)}" aria-label="Verwijder ${esc(m.name)}"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>`:""}</div>`).join("")||'<p class="notice" style="padding:14px">Niets gevonden.</p>'}</div>${exportBar("meals")}`}`;
 }
 
 let shopChecked={};try{shopChecked=JSON.parse(localStorage.getItem("mb-shop")||"{}")}catch(e){}
@@ -635,12 +690,12 @@ function renderShop(el){
 function render(){
   for(const v of ["week","meals","shop","log"]){document.getElementById("view-"+v).hidden=v!==view;const t=document.getElementById("tab-"+v);if(v===view)t.setAttribute("aria-current","page");else t.removeAttribute("aria-current")}
   const el=document.getElementById("view-"+view);
-  const focusId=document.activeElement&&document.activeElement.id;const sel=focusId==="mealsearch"?document.activeElement.selectionStart:null;
+  const focusId=document.activeElement&&document.activeElement.id;const sel=focusId==="mealsearch"||(focusId||"").startsWith("self-q-")?document.activeElement.selectionStart:null;
   if(view==="meals"&&editing!==null&&el.querySelector("#mealform"))return; // formulier niet overschrijven tijdens typen
   const keep={};el.querySelectorAll("[id^=self-]").forEach(x=>keep[x.id]=x.value);
   if(view==="week")renderWeek(el);else if(view==="meals")renderMeals(el);else if(view==="shop")renderShop(el);else renderLog(el);
   for(const id in keep){const x=document.getElementById(id);if(x)x.value=keep[id]}
-  if(focusId&&focusId.startsWith("self-")){const x=document.getElementById(focusId);if(x)x.focus()}
+  if(focusId&&focusId.startsWith("self-")){const x=document.getElementById(focusId);if(x){x.focus();if(sel!=null&&x.setSelectionRange)x.setSelectionRange(sel,sel)}}
   if(focusId==="mealsearch"){const s=document.getElementById("mealsearch");if(s){s.focus();if(sel!=null)s.setSelectionRange(sel,sel)}}
 }
 function rerenderMeals(){const el=document.getElementById("view-meals");renderMeals(el)}
@@ -660,7 +715,9 @@ document.addEventListener("click",e=>{
   else if(a==="away"){const p=plan.get(k);guard(async()=>{await writePlan(k,{mealId:null,kind:"elders",mealName:"We eten elders",prevName:p&&p.kind!=="elders"?mealName(p):"",status:"ok",by:uid||"",at:Date.now()})}).then(()=>toast("Genoteerd: we eten elders"))}
   else if(a==="home")propose(k);
   else if(a==="ing"){ingOpen.has(k)?ingOpen.delete(k):ingOpen.add(k);render()}
-  else if(a==="self"){selfMode.add(k);render()}
+  else if(a==="self"){selfMode.add(k);selfPick[k]=null;pickFilter.q="";pickFilter.on.clear();render()}
+  else if(a==="pick"){selfPick[k]=b.dataset.id;render()}
+  else if(a==="filt"||a==="filtclear"){const f=b.dataset.scope==="pick"?pickFilter:mealFilter;if(a==="filtclear")f.on.clear();else{const v=b.dataset.v;f.on.has(v)?f.on.delete(v):f.on.add(v)}render()}
   else if(a==="selfcancel"){selfMode.delete(k);render()}
   else if(a==="selfsave")saveSelf(k);
   else if(a==="newmeal"){planFor=null;view="meals";editing="new";confirmDelete=false;render();rerenderMeals();window.scrollTo(0,0);const f=document.getElementById("f-name");if(f)f.focus()}
@@ -691,7 +748,7 @@ document.addEventListener("change",e=>{
   if(t.dataset.shop){shopChecked[t.dataset.shop]=t.checked;if(!t.checked)delete shopChecked[t.dataset.shop];try{localStorage.setItem("mb-shop",JSON.stringify(shopChecked))}catch(e){}render()}
 });
 document.addEventListener("change",e=>{const t=e.target;if(t.getAttribute&&t.getAttribute("role")==="switch"){const y=t.parentElement.querySelector(".yn-label");if(y)y.textContent=t.checked?"Ja":"Nee"}});
-document.addEventListener("input",e=>{if(e.target.id==="mealsearch"){mealQuery=e.target.value;render()}});
+document.addEventListener("input",e=>{if(e.target.id==="mealsearch"){mealFilter.q=e.target.value;render()}else if(e.target.dataset&&e.target.dataset.pickq){pickFilter.q=e.target.value;render()}});
 document.addEventListener("submit",e=>{
   if(e.target.id!=="mealform")return;e.preventDefault();
   const name=document.getElementById("f-name").value.trim();if(!name)return;
