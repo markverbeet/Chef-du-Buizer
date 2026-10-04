@@ -1,0 +1,724 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Chef du Buizer</title>
+<meta name="description" content="Wat eten we de komende dagen? De avondeten-planner van ons huishouden.">
+<meta name="theme-color" content="#1f4aa8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Chef du Buizer">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}[hidden]{display:none!important}img{max-width:100%}</style>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+</head>
+<body>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap">
+<style>
+/* Layout: one column phone app, sticky header, fixed bottom tab bar; Delft-blauw als accent */
+:root{
+  --bg:#f3f5f9; --surface:#ffffff; --ink:#18213a; --muted:#5d6782; --line:#dde2ec;
+  --accent:#1f4aa8; --accent-soft:#e3eafa; --ok:#1d7a4a; --ok-soft:#e1f3e8; --warn:#9a5a00; --warn-soft:#fbefd9; --danger:#b3261e; --danger-soft:#fbe4e2;
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --r:14px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1422; --surface:#182036; --ink:#e8ecf6; --muted:#9aa4c0; --line:#2a3452;
+  --accent:#8fb0ff; --accent-soft:#22305a; --ok:#6fd39c; --ok-soft:#173a2a; --warn:#f0b960; --warn-soft:#3a2c14; --danger:#ff8a80; --danger-soft:#3d1c1c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1422; --surface:#182036; --ink:#e8ecf6; --muted:#9aa4c0; --line:#2a3452;
+  --accent:#8fb0ff; --accent-soft:#22305a; --ok:#6fd39c; --ok-soft:#173a2a; --warn:#f0b960; --warn-soft:#3a2c14; --danger:#ff8a80; --danger-soft:#3d1c1c; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font:16px/1.45 var(--body);margin:0}
+.wrap{max-width:560px;margin:0 auto;padding-inline:16px;padding-block:0 calc(96px + env(safe-area-inset-bottom,0px))}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:12px 10px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line)}
+h1{font:800 1.5rem/1.1 var(--display);margin:0;letter-spacing:-.01em}
+h1 span{color:var(--accent)}
+h2{font:700 1.15rem/1.2 var(--display);margin:0;text-wrap:balance}
+.sub{color:var(--muted);font-size:.85rem}
+header .sub{white-space:nowrap}
+section{display:flex;flex-direction:column;gap:12px;padding-block:16px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.spread{justify-content:space-between}
+button,select,input,textarea{font:inherit;color:inherit}
+button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:9px 16px;font-weight:600;cursor:pointer;min-height:42px}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+button.okbtn{background:var(--ok);border-color:var(--ok);color:var(--surface)}
+button.ghost{background:transparent}
+button.danger{color:var(--danger);border-color:var(--danger);background:transparent}
+button:disabled{opacity:.5;cursor:default}
+.day{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:10px}
+.day.ok{border-color:var(--ok);box-shadow:inset 4px 0 0 var(--ok)}
+.dayhead{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.date{font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.date b{color:var(--accent)}
+.pill{font-size:.75rem;font-weight:600;border-radius:999px;padding:3px 10px;white-space:nowrap}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}
+.pill.prop{background:var(--warn-soft);color:var(--warn)}
+.pill.none{background:var(--accent-soft);color:var(--accent)}
+.meal{font:700 1.3rem/1.2 var(--display);margin:0;overflow-wrap:break-word;hyphens:auto}
+.meal.empty{color:var(--muted);font-weight:600;font-size:1rem}
+.who{font-size:.8rem;color:var(--muted)}
+details summary{cursor:pointer;color:var(--muted);font-size:.85rem}
+details ul{margin:6px 0 0;padding-left:20px;font-size:.92rem}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.actions select{flex:1 1 140px;min-width:0;min-height:42px;border:1px solid var(--line);border-radius:999px;background:var(--surface);padding:0 12px}
+.banner{background:var(--accent-soft);border-radius:var(--r);padding:12px 14px;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.banner p{margin:0;flex:1 1 200px}
+.empty-state{background:var(--surface);border:1px dashed var(--line);border-radius:var(--r);padding:20px;display:flex;flex-direction:column;gap:12px}
+.empty-state p{margin:0;color:var(--muted)}
+.list{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent;text-align:left;width:100%;min-height:56px;font-weight:400}
+.item:last-child{border-bottom:0}
+.item strong{display:block;font-weight:600;overflow-wrap:anywhere}
+.item .sub{display:block}
+.item > span:first-child{min-width:0}
+.chev{color:var(--muted)}
+form{display:flex;flex-direction:column;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+label{display:flex;flex-direction:column;gap:6px;font-weight:600;font-size:.9rem}
+label .sub{font-weight:400}
+input[type=text],input[type=search],textarea{font-weight:400;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--bg);width:100%}
+textarea{min-height:150px;resize:vertical}
+.check{display:flex;gap:12px;align-items:flex-start;padding:10px 14px;border-bottom:1px solid var(--line);font-weight:400;flex-direction:row;font-size:1rem}
+.check:last-child{border-bottom:0}
+.check input{width:22px;height:22px;margin:1px 0 0;accent-color:var(--accent);flex:none}
+.check.done span{text-decoration:line-through;color:var(--muted)}
+.count{font-variant-numeric:tabular-nums;color:var(--muted);font-size:.85rem;margin-left:auto;white-space:nowrap}
+nav{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav .tabs{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr)}
+nav button{border:0;border-radius:0;background:transparent;min-height:60px;color:var(--muted);font-weight:600;font-size:.85rem;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+nav button[aria-current="page"]{color:var(--accent)}
+nav svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:999px;font-size:.9rem;z-index:9;max-width:calc(100% - 32px)}
+.notice{color:var(--muted);font-size:.85rem;margin:0}
+.inspo{border:1px dashed var(--accent);background:var(--accent-soft);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.inspo .meal{font-size:1.1rem}
+.eyebrow{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:var(--accent)}
+.why{margin:0;font-size:.92rem;color:var(--muted)}
+a{color:var(--accent);font-weight:600}
+button.small{min-height:34px;padding:4px 12px;font-size:.85rem}
+.day.no{border-color:var(--danger);box-shadow:inset 4px 0 0 var(--danger)}
+.pill.no{background:var(--danger-soft);color:var(--danger)}
+.mealrow{display:flex;align-items:center;gap:10px}
+.mealbtn{flex:1;min-width:0;border:0;background:transparent;padding:0;border-radius:8px;text-align:left;display:flex;flex-direction:column;align-items:flex-start;gap:2px;font-weight:400}
+.mealbtn .sub{text-decoration:underline;text-underline-offset:3px}
+.mealrow .meal.empty{flex:1}
+.yn{display:flex;gap:8px;flex:none}
+.yn button{width:48px;height:48px;min-height:48px;padding:0;border-radius:50%;display:grid;place-items:center;border-width:2px}
+.yn svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.yn .yes{color:var(--ok);border-color:var(--ok)}
+.yn .no{color:var(--danger);border-color:var(--danger)}
+.yn .yes.on{background:var(--ok);color:var(--surface)}
+.day.ok .yn .no{opacity:.35;filter:blur(1.2px) grayscale(.6);border-width:1.5px}
+.day.ok .yn .no:hover,.day.ok .yn .no:focus-visible{opacity:.8;filter:none}
+.yn .no.on{background:var(--danger);color:var(--surface)}
+.ings{margin:0;padding-left:20px;font-size:.95rem}
+.alt{border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:8px}
+.choices{display:grid;grid-template-columns:1fr;gap:8px}
+.alt select{min-height:42px;border:1px solid var(--line);border-radius:10px;background:var(--bg);padding:0 10px;width:100%}
+/* iPad en breder: weekkaarten in een raster, ruimere kolom */
+@media (min-width:760px){
+  .wrap,nav .tabs{max-width:1080px}
+  .wrap{padding-inline:28px}
+  #view-week{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));align-items:start;gap:16px}
+  #view-week > .empty-state,#view-week > .notice,#view-week > .weekhead{grid-column:1/-1}
+  #view-meals,#view-shop,#view-log{max-width:680px;margin-inline:auto;width:100%}
+  h1{font-size:1.9rem}
+  nav button{flex-direction:row;gap:8px;font-size:.95rem}
+}
+button,a{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+input,select,textarea{font-size:16px}
+.addbtn{width:56px;height:56px;min-height:56px;padding:0;border-radius:50%;border:2.5px solid var(--accent);background:var(--accent);color:var(--surface);display:grid;place-items:center;flex:none;box-shadow:0 2px 8px rgba(31,74,168,.25)}
+.addbtn svg{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label{flex-direction:row;justify-content:center;padding:11px 6px;font-weight:600;cursor:pointer;border-right:1px solid var(--line);background:var(--bg);gap:0}
+.seg label:last-of-type{border-right:0}
+.seg input:checked + label{background:var(--accent);color:var(--surface)}
+.seg input:focus-visible + label{outline:3px solid var(--accent);outline-offset:-3px}
+fieldset{border:0;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+legend{font-weight:600;font-size:.9rem;padding:0;margin-bottom:6px}
+.tag{font-size:.75rem;font-weight:600;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:1px 8px;white-space:nowrap}
+.copybtn{display:flex;align-items:center;justify-content:center;gap:8px;min-height:52px;font-size:1.05rem}
+.copybtn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linejoin:round}
+#shoptext{min-height:120px}
+.check .sub{display:block;text-decoration:none}
+.notice b{color:var(--ink);font-weight:600}
+.day.away{position:relative;overflow:hidden;min-height:140px}
+.awaybody{filter:blur(5px);opacity:.45;user-select:none;pointer-events:none;display:flex;flex-direction:column;gap:4px}
+.awaymsg{position:absolute;inset:36px 12px 12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center}
+.awaymsg strong{font:700 1.25rem/1.2 var(--display);color:var(--ink)}
+.day.away .date{color:var(--muted)}
+.details{background:var(--bg);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.details dl{margin:0;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.details dt{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:var(--muted)}
+.details dd{margin:2px 0 0;font-size:.92rem}
+.details .ings{margin-top:4px}
+.muted{color:var(--muted)}
+.tag.kt-snel{color:var(--ok);border-color:var(--ok)}
+.tag.kt-medium{color:var(--warn);border-color:var(--warn)}
+.tag.kt-lang{color:var(--danger);border-color:var(--danger)}
+.linkbtn{display:inline-flex;align-items:center;min-height:34px;padding:4px 12px;border:1px solid var(--line);border-radius:999px;text-decoration:none;font-size:.85rem;background:var(--surface)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stats div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:2px}
+.stats b{font:800 1.5rem/1 var(--display);font-variant-numeric:tabular-nums;color:var(--accent)}
+.stats span{font-size:.78rem;color:var(--muted)}
+.top{margin:6px 0 0;padding-left:22px;display:flex;flex-direction:column;gap:4px}
+.top li span:first-child{margin-right:8px}
+.top li{font-size:.95rem}
+.month{font:700 1rem/1.2 var(--display);margin:8px 0 6px;text-transform:capitalize}
+.loglist{display:flex;flex-direction:column}
+.logrow{display:flex;gap:12px;align-items:baseline;padding:10px 14px;border-bottom:1px solid var(--line)}
+.logrow:last-child{border-bottom:0}
+.logdate{width:3.6em;flex:none;color:var(--muted);font-size:.85rem;font-variant-numeric:tabular-nums}
+.logmeal{flex:1;min-width:0;overflow-wrap:break-word}
+.logrow.away .logmeal{color:var(--muted);font-style:italic}
+nav button{font-size:.78rem}
+.err{color:var(--danger);font-weight:500;font-size:.85rem}
+.itemrow{display:flex;align-items:stretch;border-bottom:1px solid var(--line)}
+.itemrow:last-child{border-bottom:0}
+.itemrow .item{border-bottom:0;flex:1;min-width:0}
+.itemrow.confirming .sub,.itemrow.confirming strong{display:block}
+.itemrow.confirming{flex-direction:column;gap:10px;padding:12px 14px;background:var(--danger-soft)}
+.trash{border:0;border-left:1px solid var(--line);border-radius:0;background:transparent;color:var(--danger);width:56px;min-height:56px;padding:0;display:grid;place-items:center;flex:none}
+.trash svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.alt.undo{background:var(--danger-soft);border-top:0;border-radius:12px;padding:12px}
+.alt.undo .sub{display:block}
+.weekhead{font-size:1.25rem}
+.exportbar{display:flex;flex-direction:column;gap:8px;padding-top:8px;border-top:1px solid var(--line);margin-top:8px}
+.exportbar textarea{min-height:160px;font-family:ui-monospace,Menlo,monospace;font-size:12px}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.logo{width:46px;height:46px;flex:none;border-radius:50%;background:#1f4aa8;box-shadow:0 0 0 3px #fff, 0 0 0 4px var(--line);display:grid;place-items:center}
+.logo svg{width:36px;height:36px;fill:#fff}
+#gate{min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding:24px 16px}
+.gatebox{max-width:380px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center}
+.gatebox .logo{width:84px;height:84px}.gatebox .logo svg{width:64px;height:64px}
+.gatebox h1{font-size:2rem}.gatebox p{margin:0;color:var(--muted)}
+.signout{background:transparent;border:0;color:var(--muted);text-decoration:underline;min-height:36px;padding:0;font-weight:500}
+.confirmdel{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+@media (prefers-reduced-motion:no-preference){.day{transition:border-color .2s, box-shadow .2s}}
+</style>
+
+<div class="wrap" lang="nl">
+  <header>
+    <div class="brand"><span class="logo" aria-hidden="true"><svg viewBox="0 0 40 40"><path d="M13 27v-4.2c-3.3-.6-5.5-3.3-5.5-6.4 0-3.6 3-6.5 6.6-6.5.6 0 1.2.1 1.8.3C17.1 8 18.9 7 20.9 7c2.4 0 4.5 1.4 5.4 3.5.4-.1.8-.1 1.2-.1 3.4 0 6 2.7 6 6s-2.2 5.6-5.5 6.2V27z"/><path d="M13 29.2h14.1V33H13z"/></svg></span><h1>Chef du <span>Buizer</span></h1></div>
+    <button class="addbtn" data-act="newmeal" id="addbtn" aria-label="Gerecht toevoegen"><svg viewBox="0 0 24 24"><path d="M12 6v12M6 12h12"/></svg></button>
+  </header>
+  <main>
+    <section id="view-week"></section>
+    <section id="view-meals" hidden></section>
+    <section id="view-shop" hidden></section>
+    <section id="view-log" hidden></section>
+  </main>
+</div>
+<nav aria-label="Onderdelen"><div class="tabs">
+  <button id="tab-week" data-view="week" aria-current="page"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Week</button>
+  <button id="tab-meals" data-view="meals"><svg viewBox="0 0 24 24"><path d="M4 4h12a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4z"/><path d="M8 9h8M8 13h6"/></svg>Gerechten</button>
+  <button id="tab-shop" data-view="shop"><svg viewBox="0 0 24 24"><path d="M5 7h14l-1.5 12h-11z"/><path d="M9 7a3 3 0 0 1 6 0"/></svg>Boodschappen</button>
+  <button id="tab-log" data-view="log"><svg viewBox="0 0 24 24"><path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="8.5"/></svg>Logboek</button>
+</div></nav>
+<div class="toast" id="toast" hidden></div>
+<div id="gate" hidden></div>
+
+<script>
+(function(){
+const DAYS = 5;
+const KT = [["snel","Snel","tot 20 minuten"],["medium","Medium","20 tot 45 minuten"],["lang","Lang","meer dan 45 minuten"]];
+const KTL = {snel:"Snel",medium:"Medium",lang:"Lang"};
+const WD = ["zo","ma","di","wo","do","vr","za"];
+const MON = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
+const EXAMPLES = [
+  ["Spaghetti bolognese", "spaghetti\ngehakt\nui\nknoflook\ntomatenblokjes\nwortel\nparmezaan"],
+  ["Hutspot met rookworst", "aardappels\nwinterpeen\nuien\nrookworst\nboter\nmelk"],
+  ["Kip kerrie met rijst", "kipfilet\nrijst\nui\nkerriepoeder\nkokosmelk\npaprika"],
+  ["Pannenkoeken", "bloem\nmelk\neieren\nspek\nstroop"],
+  ["Wraps met gehakt", "wraps\nrundergehakt\ntaco-kruiden\nijsbergsla\ntomaat\nkomkommer\ngeraspte kaas\ncreme fraiche"],
+  ["Zalm uit de oven met krieltjes", "zalmfilet\nkrieltjes\nsperziebonen\ncitroen\ndille"],
+  ["Ovenschotel met broccoli", "broccoli\nkip of ham\naardappels\nkaassaus\ngeraspte kaas"],
+  ["Nasi goreng", "rijst\nkipfilet\nprei\nwittekool\nnasi-kruiden\neieren\nkroepoek"]
+];
+
+let db=null, user=null, uid=null, canWrite=true;
+const meals = new Map();   // id -> {name, ingredients[], note}
+const plan = new Map();    // yyyy-mm-dd -> {mealId, mealName, status, by, at}
+let mealsLoaded=false, planLoaded=false, live=false;
+let delConfirm = null, undoConfirm = null; // undoConfirm: {k, next}
+let view = "week", editing = null, mealQuery = "", confirmDelete = false;
+const names = {};
+
+function pad(n){return String(n).padStart(2,"0")}
+function key(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())}
+function windowDays(){const out=[];const t=new Date();t.setHours(12,0,0,0);for(let i=0;i<DAYS;i++){const d=new Date(t);d.setDate(t.getDate()+i);out.push(d)}return out}
+function dayLabel(d,i){return (i===0?"<b>Vandaag</b> · ":i===1?"<b>Morgen</b> · ":"")+WD[d.getDay()]+" "+d.getDate()+" "+MON[d.getMonth()]}
+function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2600)}
+function sortedMeals(){return [...meals.entries()].sort((a,b)=>a[1].name.localeCompare(b[1].name,"nl"))}
+function mealName(p){if(!p)return "";if(p.mealId===null)return p.mealName||"Vrij / uit eten";const m=meals.get(p.mealId);return m?m.name:(p.mealName||"Onbekend gerecht")}
+
+async function resolveNames(ids){
+  if(!user||!user.profiles)return;
+  const need=ids.filter(id=>id&&!(id in names));if(!need.length)return;
+  try{const ps=await user.profiles(need);for(const id of need){names[id]=(ps&&ps[id]&&ps[id].name)||""}render()}catch(e){}
+}
+
+// Kies een gerecht: niet al in de planning van deze dagen, voorkeur voor lang niet gegeten
+function pickMeal(dateKey, excludeIds){
+  const all=[...meals.keys()];if(!all.length)return null;
+  let pool=all.filter(id=>!excludeIds.has(id));if(!pool.length)pool=all;
+  const target=new Date(dateKey+"T12:00:00");
+  const weights=pool.map(id=>{
+    let last=null;
+    for(const [k,p] of plan){if(p.mealId===id&&k<dateKey&&p.status==="ok"&&(!last||k>last))last=k}
+    const days=last?Math.round((target-new Date(last+"T12:00:00"))/864e5):30;
+    return Math.max(1,Math.min(days,30))**1.5;
+  });
+  let r=Math.random()*weights.reduce((a,b)=>a+b,0);
+  for(let i=0;i<pool.length;i++){r-=weights[i];if(r<=0)return pool[i]}
+  return pool[pool.length-1];
+}
+function usedInWindow(exceptKey){const s=new Set();for(const d of windowDays()){const k=key(d);if(k===exceptKey)continue;const p=plan.get(k);if(p&&p.mealId)s.add(p.mealId)}return s}
+
+let busy=false;
+async function guard(fn){if(busy||!db)return;busy=true;render();try{await fn()}catch(e){
+  if(e&&(e.code==="invalid_argument"||e.code==="permission-denied")){canWrite=false;toast("Je kunt hier alleen meekijken. Vraag om bewerkrechten.")}
+  else if(e&&e.code==="quota_exceeded")toast("De opslag is vol. Verwijder oude gerechten.");
+  else toast("Opslaan lukte niet. Probeer het nog eens.");
+}finally{busy=false;render()}}
+
+function propose(k){return guard(async()=>{
+  const id=pickMeal(k,usedInWindow(k));if(!id)return;
+  const cur=plan.get(k);
+  if(cur&&cur.mealId===id&&meals.size>1){const alt=pickMeal(k,new Set([...usedInWindow(k),id]));if(alt)return setPlan(k,alt,"voorstel")}
+  await setPlan(k,id,"voorstel");
+})}
+async function setPlan(k,mealId,status){
+  const body={mealId,mealName:mealId===null?"Vrij / uit eten":(meals.get(mealId)?.name||""),status,by:uid||"",at:Date.now()};
+  await writePlan(k,body);
+}
+async function writePlan(k,body){plan.set(k,body);delete inspo[k];render();await db.doc("plan/"+k).set(body)}
+
+// Inspiratie: een nieuw gerecht dat past bij jullie smaak (Claude, op verzoek)
+const inspo={}; // dateKey -> {loading, idea, error}
+let sample=null;
+function searchUrl(q){return "https://www.google.com/search?q="+encodeURIComponent(q+" recept")}
+async function inspire(k){
+  if(!sample||(inspo[k]&&inspo[k].loading))return;
+  inspo[k]={loading:true};render();
+  const favs=sortedMeals().map(([,m])=>"- "+m.name+(m.ingredients.length?" ("+m.ingredients.slice(0,8).join(", ")+")":"")).join("\n");
+  const prev=inspo._seen||[];
+  const d=new Date(k+"T12:00:00");
+  const prompt=`Je helpt een Nederlands huishouden met avondeten. Dit zijn hun favoriete gerechten:\n${favs.slice(0,6000)}\n\n`+
+    `Stel één ander avondgerecht voor (${["zondag","maandag","dinsdag","woensdag","donderdag","vrijdag","zaterdag"][d.getDay()]}) dat zij waarschijnlijk lekker vinden op basis van deze smaak, maar dat nog niet in de lijst staat. Het moet thuis te koken zijn met ingrediënten uit een gewone Nederlandse supermarkt.`+
+    (prev.length?` Noem niet: ${prev.join(", ")}.`:"")+
+    `\n\nAntwoord alleen met JSON in deze vorm: {"naam": "...", "waarom": "één korte zin waarom het bij hen past", "ingredienten": ["...", "..."], "kooktijd": "snel" of "medium" of "lang", "zoekterm": "zoekterm om het recept online te vinden"}`;
+  try{
+    const r=await sample.json(prompt,{cache:false});
+    if(!r||!r.naam)throw {code:"invalid_json"};
+    const idea={name:String(r.naam).slice(0,80),why:String(r.waarom||"").slice(0,200),ingredients:Array.isArray(r.ingredienten)?r.ingredienten.map(String).slice(0,25):[],search:String(r.zoekterm||r.naam).slice(0,100),kooktijd:KTL[r.kooktijd]?String(r.kooktijd):""};
+    inspo._seen=[...prev,idea.name].slice(-10);
+    inspo[k]={idea};
+  }catch(e){
+    const c=e&&e.code;
+    if(["not_granted","sampling_disabled","not_declared","capability_disabled","capability_removed"].includes(c)){sample=null;delete inspo[k];toast("Inspiratie is niet beschikbaar.")}
+    else inspo[k]={error:c==="rate_limited"?"Even te veel verzoeken. Probeer het straks opnieuw.":"Er kwam geen bruikbaar idee terug. Probeer het nog eens."};
+  }
+  render();
+}
+function takeIdea(k,save){const it=inspo[k]&&inspo[k].idea;if(!it)return;return guard(async()=>{
+  let mealId=null;
+  if(save){const ref=await db.collection("meals").add({name:it.name,ingredients:it.ingredients,note:it.why,kooktijd:it.kooktijd,createdAt:Date.now()});mealId=ref.id;meals.set(mealId,{name:it.name,ingredients:it.ingredients,note:it.why,kooktijd:it.kooktijd})}
+  await writePlan(k,mealId?{mealId,mealName:it.name,status:"ok",by:uid||"",at:Date.now()}
+    :{mealId:null,kind:"inspiratie",mealName:it.name,ingredients:it.ingredients,why:it.why,search:it.search,kooktijd:it.kooktijd,status:"ok",by:uid||"",at:Date.now()});
+  toast("Bevestigd en toegevoegd aan Gerechten");
+})}
+function saveInspired(k){const p=plan.get(k);if(!p||p.kind!=="inspiratie")return;return guard(async()=>{
+  const ing=Array.isArray(p.ingredients)?p.ingredients:[];
+  const ref=await db.collection("meals").add({name:p.mealName,ingredients:ing,note:p.why||"",kooktijd:p.kooktijd||"",createdAt:Date.now()});
+  meals.set(ref.id,{name:p.mealName,ingredients:ing,note:p.why||"",kooktijd:p.kooktijd||""});
+  await writePlan(k,{mealId:ref.id,mealName:p.mealName,status:p.status,by:uid||"",at:Date.now()});
+  toast("Bewaard bij gerechten");
+})}
+function inspoBox(k){
+  const s=inspo[k];if(!s)return "";
+  if(s.loading)return `<div class="inspo"><p class="notice">Claude zoekt een gerecht dat bij jullie past…</p></div>`;
+  if(s.error)return `<div class="inspo"><p class="notice">${esc(s.error)}</p><div class="actions"><button data-act="inspire" data-k="${k}">Opnieuw</button><button class="ghost" data-act="inspoclose" data-k="${k}">Sluiten</button></div></div>`;
+  const it=s.idea;
+  return `<div class="inspo"><span class="eyebrow">Inspiratie</span><p class="meal">${esc(it.name)}</p>${it.why?`<p class="why">${esc(it.why)}</p>`:""}<span class="sub">Kies je deze, dan komt hij ook bij Gerechten.</span>
+    ${it.ingredients.length?`<details><summary>${it.ingredients.length} ingrediënten</summary><ul>${it.ingredients.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></details>`:""}
+    <a href="${esc(searchUrl(it.search))}" target="_blank" rel="noopener">Zoek het recept online ↗</a>
+    <div class="actions"><button class="primary" data-act="takesave" data-k="${k}" ${busy?"disabled":""}>Kies deze</button><button data-act="inspire" data-k="${k}">Ander idee</button><button class="ghost" data-act="inspoclose" data-k="${k}">Terug</button></div></div>`;
+}
+const ingOpen=new Set(), selfMode=new Set();
+let planFor=null; // dag waarvoor het formulier een nieuw gerecht invult
+let autoBusy=false;
+async function autoFill(){
+  if(autoBusy||!db||!canWrite||!meals.size||!mealsLoaded||!planLoaded)return;
+  const missing=windowDays().map(key).filter(k=>!plan.get(k));if(!missing.length)return;
+  autoBusy=true;
+  try{for(const k of missing){
+    const snap=await db.doc("plan/"+k).get();
+    if(snap.exists){plan.set(k,snap.data());continue}
+    const id=pickMeal(k,usedInWindow(k));if(id)await setPlan(k,id,"voorstel");
+  }}catch(e){}finally{autoBusy=false;render()}
+}
+function lastEaten(mealId,before){let last=null;for(const [k,p] of plan){if(p.mealId===mealId&&p.status==="ok"&&k<before&&(!last||k>last))last=k}return last}
+function mealDetails(k,p,m){
+  const ings=m.ingredients||[];const kt=KT.find(x=>x[0]===m.kooktijd);
+  const last=p.mealId?lastEaten(p.mealId,k):null;
+  const rows=[];
+  rows.push(`<div><dt>Kooktijd</dt><dd>${kt?`<span class="tag kt-${kt[0]}">${kt[1]}</span> ${kt[2]}`:'<span class="muted">Niet ingevuld</span>'}</dd></div>`);
+  rows.push(`<div><dt>Laatst gegeten</dt><dd>${last?esc(planLabel(last)):'<span class="muted">Nog niet in de planning</span>'}</dd></div>`);
+  return `<div class="details">
+    <dl>${rows.join("")}</dl>
+    <div><span class="eyebrow">Ingrediënten${ings.length?` (${ings.length})`:""}</span>${ings.length?`<ul class="ings">${ings.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:'<p class="notice">Geen ingrediënten ingevuld.</p>'}</div>
+    ${m.note?`<div><span class="eyebrow">Notitie</span><p class="why">${esc(m.note)}</p></div>`:""}
+    <div class="actions"><a class="linkbtn" href="${esc(searchUrl(p.search||mealName(p)))}" target="_blank" rel="noopener">Recept zoeken ↗</a>${p.mealId&&canWrite&&meals.has(p.mealId)?`<button class="small" data-act="editmeal" data-id="${esc(p.mealId)}">Gerecht bewerken</button>`:""}</div>
+  </div>`;
+}
+const MONTHS_FULL=["januari","februari","maart","april","mei","juni","juli","augustus","september","oktober","november","december"];
+function cutoffKey(){const d=new Date();d.setHours(12,0,0,0);d.setFullYear(d.getFullYear()-1);return key(d)}
+function renderLog(el){
+  const today=key(new Date()),cut=cutoffKey();
+  const rows=[...plan.entries()].filter(([k,p])=>k<=today&&k>=cut&&p.status==="ok").sort((a,b)=>b[0].localeCompare(a[0]));
+  const eaten=rows.filter(([,p])=>p.kind!=="elders");
+  const counts=new Map();for(const [,p] of eaten){const n=mealName(p);counts.set(n,(counts.get(n)||0)+1)}
+  const top=[...counts.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],"nl")).slice(0,5);
+  let html=`<div class="row spread"><h2>Logboek</h2><span class="sub">Laatste 12 maanden</span></div>`;
+  if(!rows.length){el.innerHTML=html+'<div class="empty-state"><p>Nog niets vastgelegd. Elke bevestigde dag komt hier vanzelf in, ook "we eten elders". Vandaag staat er al in zodra je hem bevestigt.</p></div>';return}
+  const away=rows.length-eaten.length;
+  html+=`<div class="stats"><div><b>${eaten.length}</b><span>keer thuis gegeten</span></div><div><b>${away}</b><span>keer elders</span></div><div><b>${counts.size}</b><span>verschillende gerechten</span></div></div>`;
+  if(top.length)html+=`<div><span class="eyebrow">Meest gegeten</span><ol class="top">${top.map(([n,c])=>`<li><span>${esc(n)}</span><span class="count">${c}×</span></li>`).join("")}</ol></div>`;
+  let month="";html+='<div class="loglist">';
+  for(const [k,p] of rows){
+    const d=new Date(k+"T12:00:00");const mk=MONTHS_FULL[d.getMonth()]+" "+d.getFullYear();
+    if(mk!==month){if(month)html+="</div>";month=mk;html+=`<h3 class="month">${mk}</h3><div class="list">`}
+    const el2=p.kind==="elders";
+    html+=`<div class="logrow${el2?" away":""}"><span class="logdate">${WD[d.getDay()]} ${d.getDate()}</span><span class="logmeal">${el2?"We aten elders":esc(mealName(p))}</span>${k===today?'<span class="tag">vandaag</span>':""}</div>`;
+  }
+  html+="</div></div>";
+  html+=exportBar("log");
+  html+='<div><button class="signout" data-act="signout">Uitloggen</button></div>';
+  el.innerHTML=html;
+}
+// Ouder dan 12 maanden opruimen (één keer per bezoek, alleen wie mag schrijven)
+let pruned=false;
+async function prune(){
+  if(pruned||!db||!canWrite||!planLoaded)return;pruned=true;
+  const cut=cutoffKey();
+  for(const k of [...plan.keys()].filter(k=>k<cut).slice(0,100)){try{await db.doc("plan/"+k).delete()}catch(e){break}}
+}
+// Export naar XML
+let downloads=null;
+function xe(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&apos;"}[c]))}
+function stamp(){const d=new Date();return key(d)+"T"+pad(d.getHours())+":"+pad(d.getMinutes())}
+function mealsXml(){
+  const out=['<?xml version="1.0" encoding="UTF-8"?>',`<chefDuBuizer export="${stamp()}">`,`  <gerechten aantal="${meals.size}">`];
+  for(const [id,m] of sortedMeals()){
+    out.push(`    <gerecht id="${xe(id)}">`,`      <naam>${xe(m.name)}</naam>`,`      <kooktijd>${xe(m.kooktijd)}</kooktijd>`);
+    if(m.note)out.push(`      <notitie>${xe(m.note)}</notitie>`);
+    out.push(`      <ingredienten>`,...m.ingredients.map(i=>`        <ingredient>${xe(i)}</ingredient>`),`      </ingredienten>`,`    </gerecht>`);
+  }
+  out.push("  </gerechten>","</chefDuBuizer>");return out.join("\n");
+}
+function logXml(){
+  const today=key(new Date()),cut=cutoffKey();
+  const rows=[...plan.entries()].filter(([k,p])=>k<=today&&k>=cut&&p.status==="ok").sort((a,b)=>a[0].localeCompare(b[0]));
+  const out=['<?xml version="1.0" encoding="UTF-8"?>',`<chefDuBuizer export="${stamp()}">`,`  <logboek van="${cut}" tot="${today}" aantal="${rows.length}">`];
+  for(const [k,p] of rows){
+    const d=new Date(k+"T12:00:00");const away=p.kind==="elders";
+    const m=p.mealId?meals.get(p.mealId):null;
+    out.push(`    <dag datum="${k}" weekdag="${WD[d.getDay()]}"${away?' elders="ja"':""}>`);
+    if(!away){out.push(`      <gerecht>${xe(mealName(p))}</gerecht>`);if(m&&m.kooktijd)out.push(`      <kooktijd>${xe(m.kooktijd)}</kooktijd>`)}
+    if(p.by&&names[p.by])out.push(`      <bevestigdDoor>${xe(names[p.by])}</bevestigdDoor>`);
+    out.push("    </dag>");
+  }
+  out.push("  </logboek>","</chefDuBuizer>");return out.join("\n");
+}
+function exportBar(which){
+  return `<div class="exportbar"><span class="eyebrow">Exporteren als XML</span><div class="actions">
+    ${downloads?`<button data-act="xmlsave" data-which="${which}">Bewaar als bestand</button>`:""}
+    <button data-act="xmlcopy" data-which="${which}">Kopieer XML</button></div>
+    <textarea id="xml-${which}" hidden readonly aria-label="XML"></textarea></div>`;
+}
+async function xmlSave(which){
+  const data=which==="meals"?mealsXml():logXml();
+  try{await downloads.save({filename:(which==="meals"?"gerechten":"logboek")+"-"+key(new Date())+".xml",data});toast("Bestand opgeslagen")}
+  catch(e){const c=e&&e.code;if(c==="declined")return;if(c==="rate_limited")toast("Er staat al een opslagvraag open.");else{downloads=null;render();toast("Opslaan als bestand kan hier niet. Gebruik Kopieer XML.")}}
+}
+async function xmlCopy(which){
+  const data=which==="meals"?mealsXml():logXml();
+  try{await navigator.clipboard.writeText(data);toast("XML gekopieerd");return}catch(e){}
+  const ta=document.getElementById("xml-"+which);if(ta){ta.hidden=false;ta.value=data;ta.focus();ta.select();toast("Kopiëren lukte niet vanzelf. De XML is geselecteerd.")}
+}
+function planLabel(k){const d=new Date(k+"T12:00:00");return WD[d.getDay()]+" "+d.getDate()+" "+MON[d.getMonth()]}
+function setStatus(k,status){return guard(async()=>{const p=plan.get(k);if(!p)return;await writePlan(k,{...p,status,by:uid||"",at:Date.now()})})}
+function saveSelf(k){
+  const sel=document.getElementById("self-sel-"+k),val=sel&&sel.value;
+  if(!val){toast("Kies een gerecht uit de lijst.");return}
+  return guard(async()=>{
+    selfMode.delete(k);
+    if(val==="__vrij")await writePlan(k,{mealId:null,mealName:"Vrij / uit eten",status:"ok",by:uid||"",at:Date.now()});
+    else await writePlan(k,{mealId:val,mealName:meals.get(val)?.name||"",status:"ok",by:uid||"",at:Date.now()});
+    toast("Ingevuld en bevestigd");
+  });
+}
+
+function renderWeek(el){
+  const days=windowDays();
+  if(!mealsLoaded){el.innerHTML='<p class="notice">Planning laden…</p>';return}
+  if(!meals.size){
+    el.innerHTML=`<div class="empty-state"><h2>Nog geen gerechten</h2>
+      <p>Voeg jullie favoriete gerechten voor het avondeten toe met hun ingrediënten. Daarna krijgt elke dag een voorstel, dat je met een groen vinkje bevestigt of met een rood kruisje afwijst.</p>
+      <div class="row"><button class="primary" data-act="newmeal">Eerste gerecht toevoegen</button>${canWrite&&live?'<button data-act="examples">Begin met 8 Hollandse klassiekers</button>':""}</div></div>`;
+    return;
+  }
+  let html=`<h2 class="weekhead">Wat eten we de komende dagen?</h2>`;
+  days.forEach((d,i)=>{
+    const k=key(d),p=plan.get(k);const st=p?p.status:"";const ok=st==="ok",no=st==="nee";
+    if(p&&p.kind==="elders"){
+      html+=`<article class="day away"><div class="dayhead"><span class="date">${dayLabel(d,i)}</span></div>
+        <div class="awaybody" aria-hidden="true"><p class="meal">${esc(p.prevName||"Avondeten")}</p><span class="sub">Geen gerecht nodig</span></div>
+        <div class="awaymsg"><strong>We eten elders</strong>${p.by&&names[p.by]?`<span class="who">Aangegeven door ${esc(names[p.by])}</span>`:""}
+        ${canWrite?`<button class="small" data-act="home" data-k="${k}" ${busy?"disabled":""}>Toch thuis eten</button>`:""}</div></article>`;
+      return;
+    }
+    const insp=p&&p.kind==="inspiratie";
+    const m=p&&p.mealId?meals.get(p.mealId):insp?{ingredients:Array.isArray(p.ingredients)?p.ingredients.map(String):[],note:p.why||"",kooktijd:KTL[p.kooktijd]?p.kooktijd:""}:null;
+    const ings=m?m.ingredients:[];
+    const pill=!p?'<span class="pill none">Voorstel volgt</span>':ok?'<span class="pill ok">Bevestigd</span>':no?'<span class="pill no">Afgewezen</span>':'<span class="pill prop">Voorstel</span>';
+    const who=p&&p.by&&names[p.by]&&(ok||no)?`${ok?"Bevestigd":"Afgewezen"} door ${esc(names[p.by])}`:"";
+    const open=ingOpen.has(k);
+    html+=`<article class="day${ok?" ok":no?" no":""}">
+      <div class="dayhead"><span class="date">${dayLabel(d,i)}</span>${pill}</div>
+      <div class="mealrow">
+        ${p?`<button class="mealbtn" data-act="ing" data-k="${k}" aria-expanded="${open}"><span class="meal">${esc(mealName(p))}</span><span class="sub">${m?(open?"Verberg details":[m.kooktijd?KTL[m.kooktijd]:"",ings.length?ings.length+(ings.length===1?" ingrediënt":" ingrediënten"):"",
+"Bekijk details"].filter(Boolean).join(" · ")):""}</span></button>`
+           :'<p class="meal empty">Nog niets gepland</p>'}
+        ${canWrite&&p?`<div class="yn">
+          <button class="yes${ok?" on":""}" data-act="${ok?"askunok":"ok"}" data-k="${k}" aria-pressed="${ok}" aria-label="${ok?"Bevestiging intrekken":"Bevestigen"}" ${busy?"disabled":""}><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
+          <button class="no${no?" on":""}" data-act="${no?"unno":ok?"askno":"no"}" data-k="${k}" aria-pressed="${no}" aria-label="Afwijzen" ${busy?"disabled":""}><svg viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>
+        </div>`:""}
+      </div>
+      ${open&&m?mealDetails(k,p,m):""}
+      ${insp&&!no?`<div class="row"><span class="eyebrow">Inspiratie</span><a href="${esc(searchUrl(p.search||p.mealName))}" target="_blank" rel="noopener">Recept zoeken ↗</a>${canWrite?`<button class="ghost small" data-act="saveinsp" data-k="${k}" ${busy?"disabled":""}>Bewaar bij gerechten</button>`:""}</div>`:""}
+      ${who?`<span class="who">${who}</span>`:""}
+      ${canWrite&&ok&&undoConfirm&&undoConfirm.k===k?`<div class="alt undo"><strong>${undoConfirm.next==="nee"?"Wil je dit bevestigde gerecht afwijzen?":"Wil je de bevestiging echt intrekken?"}</strong><span class="sub">${esc(mealName(p))} is al bevestigd${p.by&&names[p.by]?" door "+esc(names[p.by]):""}.</span>
+        <div class="confirmdel"><button class="danger" data-act="undoyes" data-k="${k}" ${busy?"disabled":""}>Ja, ${undoConfirm.next==="nee"?"afwijzen":"intrekken"}</button><button class="ghost" data-act="undono">Nee</button></div></div>`:""}
+      ${canWrite&&no?renderAlt(k):""}
+    </article>`;
+  });
+  if(!canWrite)html+='<p class="notice">Je kijkt mee. Om dagen te bevestigen of af te wijzen heb je bewerkrechten nodig.</p>';
+  el.innerHTML=html;
+}
+function renderAlt(k){
+  if(inspo[k])return inspoBox(k);
+  if(selfMode.has(k)){
+    const opts='<option value="">Kies uit jullie gerechten…</option>'+sortedMeals().map(([id,mm])=>`<option value="${esc(id)}">${esc(mm.name)}</option>`).join("");
+    return `<div class="alt"><span class="eyebrow">Zelf invullen</span>
+      <select id="self-sel-${k}" aria-label="Kies een gerecht">${opts}</select>
+      <div class="actions"><button class="okbtn" data-act="selfsave" data-k="${k}" ${busy?"disabled":""}>Kies deze</button><button class="ghost" data-act="selfcancel" data-k="${k}">Terug</button></div>
+      <span class="sub">Staat het er niet tussen?</span>
+      <button data-act="selfnew" data-k="${k}">+ Nieuw gerecht invoeren</button></div>`;
+  }
+  return `<div class="alt"><span class="eyebrow">Wat willen jullie?</span>
+    <div class="choices">
+      <button data-act="self" data-k="${k}">Ik vul zelf in</button>
+      <button data-act="propose" data-k="${k}" ${busy?"disabled":""}>Nieuw voorstel</button>
+      <button data-act="away" data-k="${k}" ${busy?"disabled":""}>We eten niet thuis</button>
+      ${sample?`<button data-act="inspire" data-k="${k}">Inspireer ons</button>`:""}
+    </div></div>`;
+}
+
+function renderMeals(el){
+  if(editing!==null){
+    const m=editing==="new"?{name:"",ingredients:[],note:"",kooktijd:""}:meals.get(editing)||{name:"",ingredients:[],note:"",kooktijd:""};
+    el.innerHTML=`<div class="row spread"><h2>${editing==="new"?(planFor?"Nieuw gerecht voor "+esc(planLabel(planFor)):"Nieuw gerecht"):"Gerecht bewerken"}</h2><button class="ghost" data-act="cancel">Terug</button></div>
+    <form id="mealform">
+      <label for="f-name">Titel<input type="text" id="f-name" required maxlength="80" value="${esc(m.name)}" placeholder="Bijv. Stamppot boerenkool"></label>
+      <label for="f-ing">Ingrediënten <span class="sub">Eén per regel, minstens één</span><textarea id="f-ing" required aria-describedby="f-ing-err" placeholder="boerenkool&#10;aardappels&#10;rookworst">${esc(m.ingredients.join("\n"))}</textarea><span class="err" id="f-ing-err" hidden>Vul minstens één ingrediënt in. Een gerecht zonder ingrediënten kan niet op de boodschappenlijst.</span></label>
+      <fieldset><legend>Kooktijd</legend><div class="seg">${KT.map(([v,l,h])=>`<input type="radio" name="kt" id="kt-${v}" value="${v}" ${m.kooktijd===v?"checked":""}><label for="kt-${v}" title="${h}">${l}</label>`).join("")}</div><span class="sub">Snel: tot 20 min · Medium: 20 tot 45 min · Lang: meer dan 45 min</span></fieldset>
+      <label for="f-note">Notitie <span class="sub">Optioneel, bijv. wie het lekker vindt</span><input type="text" id="f-note" maxlength="200" value="${esc(m.note||"")}"></label>
+      <div class="row spread"><button class="primary" type="submit" ${busy?"disabled":""}>Opslaan</button>
+      ${editing!=="new"?(confirmDelete?`<span class="confirmdel"><span>Wil je dit gerecht echt verwijderen?</span><button type="button" class="danger" data-act="delyes">Ja, verwijder</button><button type="button" class="ghost" data-act="delno">Nee</button></span>`:'<button type="button" class="danger" data-act="del">Verwijderen</button>'):""}</div>
+    </form>`;
+    return;
+  }
+  const q=mealQuery.trim().toLowerCase();
+  const list=sortedMeals().filter(([,m])=>!q||m.name.toLowerCase().includes(q)||m.ingredients.some(i=>i.toLowerCase().includes(q)));
+  el.innerHTML=`<div class="row spread"><h2>Gerechten <span class="sub">(${meals.size})</span></h2>${canWrite?'<button class="primary" data-act="newmeal">+ Nieuw</button>':""}</div>
+    ${meals.size>5?`<input type="search" id="mealsearch" placeholder="Zoek op gerecht of ingrediënt" value="${esc(mealQuery)}">`:""}
+    ${!mealsLoaded?'<p class="notice">Laden…</p>':!meals.size?'<div class="empty-state"><p>Nog geen gerechten. Voeg jullie favorieten toe; daaruit komen de voorstellen.</p></div>':
+    `<div class="list">${list.map(([id,m])=>delConfirm===id?`<div class="itemrow confirming"><span><strong>Wil je ${esc(m.name)} echt verwijderen?</strong><span class="sub">Het verdwijnt uit Gerechten en uit toekomstige voorstellen.</span></span><span class="confirmdel"><button class="danger" data-act="rowdelyes" data-id="${esc(id)}" ${busy?"disabled":""}>Ja, verwijder</button><button class="ghost" data-act="rowdelno">Nee</button></span></div>`:`<div class="itemrow"><button class="item" data-act="edit" data-id="${esc(id)}"><span><strong>${esc(m.name)}${m.kooktijd?` <span class="tag">${KTL[m.kooktijd]}</span>`:""}</strong><span class="sub">${m.ingredients.length?esc(m.ingredients.slice(0,4).join(", "))+(m.ingredients.length>4?"…":""):"Geen ingrediënten"}</span></span><span class="chev">›</span></button>${canWrite?`<button class="trash" data-act="rowdel" data-id="${esc(id)}" aria-label="Verwijder ${esc(m.name)}"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>`:""}</div>`).join("")||'<p class="notice" style="padding:14px">Niets gevonden.</p>'}</div>${exportBar("meals")}`}`;
+}
+
+let shopChecked={};try{shopChecked=JSON.parse(localStorage.getItem("mb-shop")||"{}")}catch(e){}
+function shopData(){
+  const agg=new Map(),days=[];let pending=0;
+  windowDays().forEach((d,i)=>{const p=plan.get(key(d));if(!p)return;if(p.status!=="ok"){pending++;return}
+    const m=p.mealId?meals.get(p.mealId):p.kind==="inspiratie"?{name:p.mealName,ingredients:Array.isArray(p.ingredients)?p.ingredients.map(String):[]}:null;if(!m)return;
+    days.push({label:WD[d.getDay()]+" "+d.getDate()+" "+MON[d.getMonth()],name:m.name});
+    for(const ing of m.ingredients){const k=ing.trim().toLowerCase();if(!k)continue;const e=agg.get(k)||{label:ing.trim(),meals:[]};e.meals.push(m.name);agg.set(k,e)}});
+  return {items:[...agg.entries()].sort((a,b)=>a[0].localeCompare(b[0],"nl")),days,pending};
+}
+function shopText(){
+  const {items,days}=shopData();
+  const lines=["Boodschappen voor "+days.map(x=>x.label+" ("+x.name+")").join(", "),""];
+  for(const [k,e] of items){if(shopChecked[k])continue;lines.push("- "+e.label+(e.meals.length>1?" (×"+e.meals.length+")":""))}
+  return lines.join("\n");
+}
+async function copyShop(){
+  const text=shopText();
+  try{await navigator.clipboard.writeText(text);toast("Gekopieerd naar het klembord");return}catch(e){}
+  const ta=document.getElementById("shoptext");if(ta){ta.hidden=false;ta.value=text;ta.focus();ta.select();toast("Kopiëren lukte niet vanzelf. De lijst is geselecteerd, kopieer hem zelf.")}
+}
+function renderShop(el){
+  const {items,days,pending}=shopData();
+  const left=items.filter(([k])=>!shopChecked[k]).length;
+  el.innerHTML=`<div class="row spread"><h2>Boodschappen</h2><span class="sub">${days.length} bevestigde ${days.length===1?"dag":"dagen"}</span></div>
+   ${days.length?`<p class="notice">${days.map(x=>`<b>${esc(x.label)}</b> ${esc(x.name)}`).join(" · ")}</p>`:""}
+   ${pending?`<p class="notice">${pending} ${pending===1?"dag is":"dagen zijn"} nog niet bevestigd en ${pending===1?"staat":"staan"} niet op de lijst.</p>`:""}
+   ${items.length?`<button class="primary copybtn" data-act="copyshop" ${left?"":"disabled"}><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg>Kopieer lijst (${left})</button>
+   <textarea id="shoptext" hidden readonly aria-label="Boodschappenlijst als tekst"></textarea>
+   <div class="list">${items.map(([k,e])=>`<label class="check${shopChecked[k]?" done":""}" for="s-${esc(k).replace(/[^a-z0-9]/g,"_")}"><input type="checkbox" id="s-${esc(k).replace(/[^a-z0-9]/g,"_")}" data-shop="${esc(k)}" ${shopChecked[k]?"checked":""}><span>${esc(e.label)}<span class="sub">${esc([...new Set(e.meals)].join(", "))}</span></span>${e.meals.length>1?`<span class="count">×${e.meals.length}</span>`:""}</label>`).join("")}</div>
+   <p class="notice">Vink aan wat jullie al in huis hebben; dat gaat niet mee bij het kopiëren. Vinkjes onthoudt alleen dit apparaat.</p><div><button class="ghost" data-act="clearshop">Vinkjes wissen</button></div>`
+   :'<div class="empty-state"><p>Nog niets op de lijst. Bevestig dagen met het groene vinkje in het weekoverzicht; hun ingrediënten komen hier.</p></div>'}`;
+}
+
+function render(){
+  for(const v of ["week","meals","shop","log"]){document.getElementById("view-"+v).hidden=v!==view;const t=document.getElementById("tab-"+v);if(v===view)t.setAttribute("aria-current","page");else t.removeAttribute("aria-current")}
+  const el=document.getElementById("view-"+view);
+  const focusId=document.activeElement&&document.activeElement.id;const sel=focusId==="mealsearch"?document.activeElement.selectionStart:null;
+  if(view==="meals"&&editing!==null&&el.querySelector("#mealform"))return; // formulier niet overschrijven tijdens typen
+  const keep={};el.querySelectorAll("[id^=self-]").forEach(x=>keep[x.id]=x.value);
+  if(view==="week")renderWeek(el);else if(view==="meals")renderMeals(el);else if(view==="shop")renderShop(el);else renderLog(el);
+  for(const id in keep){const x=document.getElementById(id);if(x)x.value=keep[id]}
+  if(focusId&&focusId.startsWith("self-")){const x=document.getElementById(focusId);if(x)x.focus()}
+  if(focusId==="mealsearch"){const s=document.getElementById("mealsearch");if(s){s.focus();if(sel!=null)s.setSelectionRange(sel,sel)}}
+}
+function rerenderMeals(){const el=document.getElementById("view-meals");renderMeals(el)}
+
+document.addEventListener("click",e=>{
+  const nb=e.target.closest("nav button");if(nb){view=nb.dataset.view;if(view!=="meals"){editing=null;confirmDelete=false}planFor=null;render();window.scrollTo(0,0);return}
+  const b=e.target.closest("[data-act]");if(!b||b.tagName==="SELECT")return;
+  const a=b.dataset.act,k=b.dataset.k;
+  if(a==="propose")propose(k);
+  else if(a==="ok"){selfMode.delete(k);delete inspo[k];setStatus(k,"ok").then(()=>toast("Bevestigd"))}
+  else if(a==="unok"||a==="unno"){selfMode.delete(k);delete inspo[k];setStatus(k,"voorstel")}
+  else if(a==="no")setStatus(k,"nee");
+  else if(a==="askunok"){undoConfirm={k,next:"voorstel"};render()}
+  else if(a==="askno"){undoConfirm={k,next:"nee"};render()}
+  else if(a==="undono"){undoConfirm=null;render()}
+  else if(a==="undoyes"){const next=undoConfirm&&undoConfirm.k===k?undoConfirm.next:"voorstel";undoConfirm=null;setStatus(k,next)}
+  else if(a==="away"){const p=plan.get(k);guard(async()=>{await writePlan(k,{mealId:null,kind:"elders",mealName:"We eten elders",prevName:p&&p.kind!=="elders"?mealName(p):"",status:"ok",by:uid||"",at:Date.now()})}).then(()=>toast("Genoteerd: we eten elders"))}
+  else if(a==="home")propose(k);
+  else if(a==="ing"){ingOpen.has(k)?ingOpen.delete(k):ingOpen.add(k);render()}
+  else if(a==="self"){selfMode.add(k);render()}
+  else if(a==="selfcancel"){selfMode.delete(k);render()}
+  else if(a==="selfsave")saveSelf(k);
+  else if(a==="newmeal"){planFor=null;view="meals";editing="new";confirmDelete=false;render();rerenderMeals();window.scrollTo(0,0);const f=document.getElementById("f-name");if(f)f.focus()}
+  else if(a==="editmeal"){planFor=null;view="meals";editing=b.dataset.id;confirmDelete=false;render();rerenderMeals();window.scrollTo(0,0)}
+  else if(a==="edit"){editing=b.dataset.id;confirmDelete=false;rerenderMeals()}
+  else if(a==="cancel"){editing=null;if(planFor){planFor=null;view="week";render();window.scrollTo(0,0)}else rerenderMeals()}
+  else if(a==="selfnew"){planFor=k;selfMode.delete(k);view="meals";editing="new";confirmDelete=false;render();rerenderMeals();window.scrollTo(0,0);const f=document.getElementById("f-name");if(f)f.focus()}
+  else if(a==="del"){confirmDelete=true;rerenderMeals()}
+  else if(a==="delno"){confirmDelete=false;rerenderMeals()}
+  else if(a==="rowdel"){delConfirm=b.dataset.id;rerenderMeals()}
+  else if(a==="rowdelno"){delConfirm=null;rerenderMeals()}
+  else if(a==="rowdelyes"){const id=b.dataset.id;guard(async()=>{await db.doc("meals/"+id).delete();meals.delete(id);delConfirm=null;rerenderMeals();toast("Gerecht verwijderd")})}
+  else if(a==="delyes"){const id=editing;guard(async()=>{await db.doc("meals/"+id).delete();meals.delete(id);editing=null;confirmDelete=false;rerenderMeals();toast("Gerecht verwijderd")})}
+  else if(a==="examples")guard(async()=>{for(const [name,ing] of EXAMPLES){await db.collection("meals").add({name,ingredients:ing.split("\n"),note:"",createdAt:Date.now()})}toast("8 gerechten toegevoegd")});
+  else if(a==="inspire")inspire(k);
+  else if(a==="inspoclose"){delete inspo[k];render()}
+  else if(a==="take")takeIdea(k,false);
+  else if(a==="takesave")takeIdea(k,true);
+  else if(a==="saveinsp")saveInspired(k);
+  else if(a==="copyshop")copyShop();
+  else if(a==="xmlsave")xmlSave(b.dataset.which);
+  else if(a==="xmlcopy")xmlCopy(b.dataset.which);
+  else if(a==="signout"){if(window.firebase)firebase.auth().signOut()}
+  else if(a==="clearshop"){shopChecked={};try{localStorage.setItem("mb-shop","{}")}catch(e){}render()}
+});
+document.addEventListener("change",e=>{
+  const t=e.target;
+  if(t.dataset.shop){shopChecked[t.dataset.shop]=t.checked;if(!t.checked)delete shopChecked[t.dataset.shop];try{localStorage.setItem("mb-shop",JSON.stringify(shopChecked))}catch(e){}render()}
+});
+document.addEventListener("input",e=>{if(e.target.id==="mealsearch"){mealQuery=e.target.value;render()}});
+document.addEventListener("submit",e=>{
+  if(e.target.id!=="mealform")return;e.preventDefault();
+  const name=document.getElementById("f-name").value.trim();if(!name)return;
+  const ingredients=document.getElementById("f-ing").value.split("\n").map(s=>s.trim()).filter(Boolean);
+  const ingErr=document.getElementById("f-ing-err");
+  if(!ingredients.length){ingErr.hidden=false;document.getElementById("f-ing").focus();return}
+  ingErr.hidden=true;
+  const note=document.getElementById("f-note").value.trim();
+  const ktEl=document.querySelector("input[name=kt]:checked");const kooktijd=ktEl?ktEl.value:"";
+  const id=editing;
+  guard(async()=>{
+    const day=id==="new"?planFor:null;
+    if(id==="new"){const ref=await db.collection("meals").add({name,ingredients,note,kooktijd,createdAt:Date.now()});
+      if(day){meals.set(ref.id,{name,ingredients,note,kooktijd});await writePlan(day,{mealId:ref.id,mealName:name,status:"ok",by:uid||"",at:Date.now()})}}
+    else await db.doc("meals/"+id).set({...(meals.get(id)||{}),name,ingredients,note,kooktijd});
+    editing=null;planFor=null;
+    if(day){view="week";render();window.scrollTo(0,0);toast("Bewaard en ingepland")}else{rerenderMeals();toast("Opgeslagen")}
+  });
+});
+
+render();
+
+// De week schuift mee: als de datum verandert, nieuwe dag tonen en een voorstel maken
+let shownDay=key(new Date());
+function checkDay(){const t=key(new Date());if(t!==shownDay){shownDay=t;ingOpen.clear();render();autoFill()}}
+setInterval(checkDay,60000);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)checkDay()});
+
+// Firebase: inloggen met Google, gedeelde gegevens in Firestore
+const FB_CONFIG={apiKey:"AIzaSyCWEUDDO23DB31ViNawN-AUFzSvpHMbuW0",authDomain:"chef-du-buizer-ccf4a.firebaseapp.com",projectId:"chef-du-buizer-ccf4a",storageBucket:"chef-du-buizer-ccf4a.firebasestorage.app",messagingSenderId:"801763330891",appId:"1:801763330891:web:cc947d02c21af8d00ef6ce"};
+function wrapDoc(r){return{get:async()=>{const x=await r.get();return{exists:x.exists,data:()=>x.data()}},set:d=>r.set(d),delete:()=>r.delete()}}
+function makeDb(fdb){return{
+  collection(name){const ref=fdb.collection(name);return{
+    onSnapshot:(next,err)=>ref.onSnapshot(q=>next({docs:q.docs.map(d=>({id:d.id,exists:true,data:()=>d.data()}))}),err),
+    add:async d=>{const r=await ref.add(d);return{id:r.id}},
+    doc:id=>wrapDoc(ref.doc(id))}},
+  doc:p=>wrapDoc(fdb.doc(p))}}
+function showGate(html){const g=document.getElementById("gate");g.innerHTML=html;g.hidden=false;document.querySelector(".wrap").hidden=true;document.querySelector("nav").hidden=true}
+function hideGate(){document.getElementById("gate").hidden=true;document.querySelector(".wrap").hidden=false;document.querySelector("nav").hidden=false}
+const LOGO=document.querySelector(".logo").outerHTML;
+function loginScreen(msg){showGate(`<div class="gatebox">${LOGO}<h1>Chef du <span>Buizer</span></h1><p>Wat eten we de komende dagen? Log in met het Google-account van je huishouden.</p>${msg?`<p class="err">${msg}</p>`:""}<button class="primary" id="loginbtn">Inloggen met Google</button></div>`);
+  document.getElementById("loginbtn").onclick=()=>{const p=new firebase.auth.GoogleAuthProvider();p.setCustomParameters({prompt:"select_account"});
+    firebase.auth().signInWithPopup(p).catch(e=>{if(e&&(e.code==="auth/popup-blocked"||e.code==="auth/operation-not-supported-in-this-environment"))firebase.auth().signInWithRedirect(p);else if(e&&e.code!=="auth/popup-closed-by-user")loginScreen("Inloggen lukte niet. Probeer het opnieuw.")})}}
+let unsubs=[];
+(function start(){
+  if(!window.firebase){document.getElementById("view-week").innerHTML='<p class="notice">De app kon niet laden. Controleer je internetverbinding en probeer het opnieuw.</p>';return}
+  firebase.initializeApp(FB_CONFIG);
+  const fdb=firebase.firestore();
+  firebase.auth().getRedirectResult().catch(()=>{});
+  firebase.auth().onAuthStateChanged(async u=>{
+    unsubs.forEach(f=>{try{f()}catch(e){}});unsubs=[];
+    if(!u){db=null;loginScreen("");return}
+    uid=u.uid;db=makeDb(fdb);
+    const nameCache={};
+    user={id:async()=>uid,can:async()=>true,profiles:async ids=>{const out={};await Promise.all(ids.map(async id=>{if(!(id in nameCache)){try{const x=await fdb.doc("users/"+id).get();nameCache[id]=x.exists?(x.data().name||""):""}catch(e){nameCache[id]=""}}out[id]={name:nameCache[id]}}));return out}};
+    try{await fdb.doc("users/"+uid).set({name:(u.displayName||"").split(" ")[0]||u.email,email:u.email||""},{merge:true})}
+    catch(e){if(e&&e.code==="permission-denied"){showGate(`<div class="gatebox">${LOGO}<h1>Geen toegang</h1><p>${esc(u.email||"Dit account")} staat niet op de lijst van het huishouden. Vraag de beheerder om je toe te voegen, of log in met een ander account.</p><button id="logoutbtn">Ander account kiezen</button></div>`);document.getElementById("logoutbtn").onclick=()=>firebase.auth().signOut();return}}
+    hideGate();live=true;canWrite=true;
+    downloads={save:async({filename,data})=>{const url=URL.createObjectURL(new Blob([data],{type:"application/xml"}));const a=document.createElement("a");a.href=url;a.download=filename.replace(/\.txt$/,"");document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000);return{status:"saved"}}};
+    unsubs.push(db.collection("meals").onSnapshot(s=>{meals.clear();for(const d of s.docs){const x=d.data();meals.set(d.id,{name:String(x.name||"Naamloos"),ingredients:Array.isArray(x.ingredients)?x.ingredients.map(String):[],note:String(x.note||""),kooktijd:KTL[x.kooktijd]?String(x.kooktijd):""})}mealsLoaded=true;render();autoFill()},()=>{mealsLoaded=true;render()}));
+    unsubs.push(db.collection("plan").onSnapshot(s=>{plan.clear();for(const d of s.docs)plan.set(d.id,d.data());planLoaded=true;render();autoFill();prune();resolveNames([...new Set([...plan.values()].map(p=>p.by))])},()=>{}));
+    render();
+  });
+})();
+})();
+</script>
+
+</body>
+</html>

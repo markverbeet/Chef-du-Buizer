@@ -1,0 +1,17 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Alleen deze Google-accounts van het huishouden mogen lezen en schrijven.
+    function lid() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.lower() in [
+          'markverbeet@gmail.com',
+          'minkebuizer@gmail.com'
+        ];
+    }
+    match /{document=**} {
+      allow read, write: if lid();
+    }
+  }
+}
