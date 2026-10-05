@@ -595,7 +595,7 @@ function importBox(){
   if(!canWrite)return "";
   const st=importState;
   const list=(arr)=>`<ul>${arr.slice(0,8).map(n=>`<li>${esc(n)}</li>`).join("")}${arr.length>8?`<li>en nog ${arr.length-8}</li>`:""}</ul>`;
-  return `<div class="importbox"><span class="eyebrow">Importeren uit bestand</span>
+  return `<div class="importbox" id="importeren"><span class="eyebrow">Importeren uit bestand</span>
     ${st&&st.error?`<p class="err">${esc(st.error)}</p>`:""}
     ${st&&!st.error?`<div class="importsum"><strong>${esc(st.file)}</strong>
       <span>${st.add.length} nieuwe ${st.add.length===1?"gerecht":"gerechten"} om toe te voegen.</span>${st.add.length?list(st.add.map(m=>m.name)):""}
@@ -743,7 +743,7 @@ function renderMeals(el){
   }
   const list=sortedMeals().filter(([,m])=>matchMeal(m,mealFilter));
   const filtering=mealFilter.on.size||mealFilter.q.trim();
-  el.innerHTML=`<div class="row spread"><h2>Gerechten <span class="sub">(${filtering?list.length+" van "+meals.size:meals.size})</span></h2>${canWrite?'<button class="primary" data-act="newmeal">+ Nieuw</button>':""}</div>
+  el.innerHTML=`<div class="row spread"><h2>Gerechten <span class="sub">(${filtering?list.length+" van "+meals.size:meals.size})</span></h2>${canWrite?'<div class="actions"><button data-act="impjump">Importeren</button><button class="primary" data-act="newmeal">+ Nieuw</button></div>':""}</div>
     ${meals.size>5?`<input type="search" id="mealsearch" placeholder="Zoek op gerecht of ingrediënt" value="${esc(mealFilter.q)}">`:""}
     ${meals.size?filterBar("meals",mealFilter):""}
     ${!mealsLoaded?'<p class="notice">Laden…</p>':!meals.size?'<div class="empty-state"><p>Nog geen gerechten. Voeg jullie favorieten toe; daaruit komen de voorstellen.</p></div>'+importBox():
@@ -835,6 +835,7 @@ document.addEventListener("click",e=>{
   else if(a==="saveinsp")saveInspired(k);
   else if(a==="copyshop")copyShop();
   else if(a==="impgo")runImport();
+  else if(a==="impjump"){const x=document.querySelector(".importbox");if(x){x.scrollIntoView({behavior:"smooth",block:"start"});const f=document.getElementById("impfile");if(f)f.focus({preventScroll:true})}}
   else if(a==="impcancel"){importState=null;render()}
   else if(a==="imptemplate"){downloads.save({filename:"gerechten-voorbeeld.csv",data:"\ufeff"+IMPORT_EXAMPLE}).catch(()=>{})}
   else if(a==="xmlsave")xmlSave(b.dataset.which);
