@@ -728,6 +728,7 @@ function renderMeals(el){
     const m=editing==="new"?{name:"",ingredients:[],note:"",kooktijd:""}:meals.get(editing)||{name:"",ingredients:[],note:"",kooktijd:""};
     const toggles=FLAGS.map(([k,l])=>`<label class="switch" for="f-${k}"><span>${l}</span><input type="checkbox" role="switch" id="f-${k}" ${m[k]?"checked":""}><span class="track" aria-hidden="true"></span><span class="yn-label" aria-hidden="true">${m[k]?"Ja":"Nee"}</span></label>`).join("");
     el.innerHTML=`<div class="row spread"><h2>${editing==="new"?(planFor?"Nieuw gerecht voor "+esc(planLabel(planFor)):"Nieuw gerecht"):"Gerecht bewerken"}</h2><button class="ghost" data-act="cancel">Terug</button></div>
+    ${editing!=="new"&&m.name?`<div class="actions"><a class="linkbtn" href="${esc(searchUrl(m.name))}" target="_blank" rel="noopener">Zoek recept online ↗</a></div>`:""}
     <form id="mealform">
       <label for="f-name">Titel<input type="text" id="f-name" required maxlength="80" value="${esc(m.name)}" placeholder="Bijv. Stamppot boerenkool"></label>
       <label for="f-ing">Ingrediënten <span class="sub">Eén per regel, minstens één</span><textarea id="f-ing" required aria-describedby="f-ing-err" placeholder="boerenkool&#10;aardappels&#10;rookworst">${esc(m.ingredients.join("\n"))}</textarea><span class="err" id="f-ing-err" hidden>Vul minstens één ingrediënt in. Een gerecht zonder ingrediënten kan niet op de boodschappenlijst.</span></label>
