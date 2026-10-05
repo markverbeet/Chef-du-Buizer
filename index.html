@@ -537,9 +537,9 @@ function logXml(){
 }
 // Importeren: CSV (Excel/Numbers), XML (zelfde formaat als de export) of JSON
 let importState=null; // {file, add:[], dup:[], bad:[], error}
-const IMPORT_EXAMPLE='naam;ingredienten;kooktijd;kindvriendelijk;peulvruchten;invriesbaar;notitie\nChili con carne;gehakt|kidneybonen|tomaten|ui|paprika;medium;ja;ja;ja;lekker met rijst\nPannenkoeken;bloem|melk|eieren;snel;ja;nee;nee;\n';
+const IMPORT_EXAMPLE='Naam;Kooktijd (snel/medium/lang);Kindvriendelijk (ja/nee);Peulvruchten (ja/nee);Invriesbaar (ja/nee);Notitie;Ingrediënt 1;Ingrediënt 2;Ingrediënt 3;Ingrediënt 4;Ingrediënt 5;Ingrediënt 6;Ingrediënt 7;Ingrediënt 8;Ingrediënt 9;Ingrediënt 10;Ingrediënt 11;Ingrediënt 12\r\nChili con carne;medium;ja;ja;ja;lekker met rijst;gehakt;kidneybonen;tomaten;ui;paprika;rijst;;;;;;\r\nPannenkoeken;snel;ja;nee;nee;;bloem;melk;eieren;spek;;;;;;;;\r\nErwtensoep;lang;ja;ja;ja;;spliterwten;rookworst;winterpeen;prei;knolselderij;aardappels;;;;;;\r\n';
 function normKey(h){return String(h||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z]/g,"")}
-function fieldOf(h){const k=normKey(h);
+function fieldOf(h){const k=normKey(String(h||"").replace(/\(.*?\)/g,""));
   if(/^(naam|titel|gerecht|name|title)$/.test(k))return "name";
   if(/^(ingredienten|ingredient|ingredients)$/.test(k))return "ingredients";
   if(/^(kooktijd|tijd|cookingtime|time)$/.test(k))return "kooktijd";
@@ -563,7 +563,9 @@ function parseCsv(text){
   const nonEmpty=rows.filter(r=>r.some(c=>c.trim()));if(!nonEmpty.length)return [];
   const head=nonEmpty[0].map(fieldOf);
   if(!head.includes("name"))throw new Error("De eerste regel moet kolomnamen hebben, met minstens naam en ingredienten.");
-  return nonEmpty.slice(1).map(r=>{const o={};head.forEach((f,i)=>{if(f)o[f]=r[i]??""});return o});
+  const multi=head.filter(f=>f==="ingredients").length>1;
+  return nonEmpty.slice(1).map(r=>{const o={};head.forEach((f,i)=>{if(!f)return;const v=r[i]??"";
+    if(f==="ingredients"&&multi){if(String(v).trim())(o.ingredients=o.ingredients||[]).push(String(v).trim())}else o[f]=v});return o});
 }
 function parseXml(text){
   const doc=new DOMParser().parseFromString(text,"application/xml");if(doc.querySelector("parsererror"))throw new Error("Het XML-bestand is niet goed leesbaar.");
@@ -601,11 +603,12 @@ function importBox(){
       <div class="actions">${st.add.length?`<button class="primary" data-act="impgo" ${busy?"disabled":""}>Ja, voeg ${st.add.length} toe</button>`:""}<button class="ghost" data-act="impcancel">Annuleer</button></div></div>`
     :`<label for="impfile" class="sub">Kies een CSV-, XML- of JSON-bestand. Je ziet eerst wat er wordt toegevoegd.</label>
       <input type="file" id="impfile" accept=".csv,.tsv,.txt,.xml,.json,text/csv,application/xml,application/json">
+      ${downloads?'<div><button class="small" data-act="imptemplate">Download invulbestand (CSV)</button></div>':""}
       <details><summary>Welk formaat?</summary>
-        <p>Een CSV uit Excel of Numbers met op de eerste regel deze kolommen (puntkomma of komma als scheiding):</p>
-        <pre>${esc(IMPORT_EXAMPLE)}</pre>
-        <p>Ingrediënten scheid je met een | (of zet ze onder elkaar in één cel). Kooktijd is snel, medium of lang (of S, M, L). Kenmerken zijn ja of nee. Alleen naam en ingredienten zijn verplicht. Een XML-bestand uit de export hierboven werkt ook. Gerechten die al bestaan (zelfde naam) worden overgeslagen.</p>
-        ${downloads?'<button class="ghost small" data-act="imptemplate">Download voorbeeldbestand</button>':""}
+        <p>Download het invulbestand en open het in Excel of Numbers. Elke regel is één gerecht, met deze kolommen:</p>
+        <ul><li><b>Naam</b> (verplicht)</li><li><b>Kooktijd</b>: snel, medium of lang (of S, M, L)</li><li><b>Kindvriendelijk</b>, <b>Peulvruchten</b>, <b>Invriesbaar</b>: ja of nee (leeg is nee)</li><li><b>Notitie</b> (mag leeg)</li><li><b>Ingrediënt 1</b> tot en met <b>12</b>: één ingrediënt per vakje, minstens één. Meer nodig? Voeg gewoon een kolom Ingrediënt 13 toe.</li></ul>
+        <p>Sla daarna op als CSV en kies het bestand hierboven.</p>
+        <p>Ook het oude formaat (alle ingrediënten in één kolom, gescheiden door |) en een XML-bestand uit de export werken. Gerechten die al bestaan (zelfde naam) worden overgeslagen.</p>
       </details>`}
   </div>`;
 }
