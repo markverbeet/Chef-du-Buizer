@@ -196,6 +196,13 @@ nav button{font-size:.78rem}
 .alt.undo .sub{display:block}
 .weekhead{font-size:1.25rem}
 .exportbar{display:flex;flex-direction:column;gap:8px;padding-top:8px;border-top:1px solid var(--line);margin-top:8px}
+.importbox{display:flex;flex-direction:column;gap:8px;padding-top:8px;border-top:1px solid var(--line);margin-top:8px}
+.importbox input[type=file]{font-size:.9rem}
+.importbox details{font-size:.9rem;color:var(--muted)}
+.importbox details summary{cursor:pointer;color:var(--accent);font-weight:600}
+.importbox pre{white-space:pre-wrap;font-size:12px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;margin:6px 0}
+.importsum{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:6px}
+.importsum ul{margin:0;padding-left:18px;font-size:.9rem;color:var(--muted)}
 .exportbar textarea{min-height:160px;font-family:ui-monospace,Menlo,monospace;font-size:12px}
 .brand{display:flex;align-items:center;gap:10px;min-width:0}
 .logo{width:46px;height:46px;flex:none;border-radius:50%;background:#1f4aa8;box-shadow:0 0 0 3px #fff, 0 0 0 4px var(--line);display:grid;place-items:center}
@@ -528,6 +535,89 @@ function logXml(){
   }
   out.push("  </logboek>","</chefDuBuizer>");return out.join("\n");
 }
+// Importeren: CSV (Excel/Numbers), XML (zelfde formaat als de export) of JSON
+let importState=null; // {file, add:[], dup:[], bad:[], error}
+const IMPORT_EXAMPLE='naam;ingredienten;kooktijd;kindvriendelijk;peulvruchten;invriesbaar;notitie\nChili con carne;gehakt|kidneybonen|tomaten|ui|paprika;medium;ja;ja;ja;lekker met rijst\nPannenkoeken;bloem|melk|eieren;snel;ja;nee;nee;\n';
+function normKey(h){return String(h||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z]/g,"")}
+function fieldOf(h){const k=normKey(h);
+  if(/^(naam|titel|gerecht|name|title)$/.test(k))return "name";
+  if(/^(ingredienten|ingredient|ingredients)$/.test(k))return "ingredients";
+  if(/^(kooktijd|tijd|cookingtime|time)$/.test(k))return "kooktijd";
+  if(/^kind/.test(k))return "kind";
+  if(/^peul|^bevatpeul|^legume/.test(k))return "peul";
+  if(/vries|^freez/.test(k))return "vries";
+  if(/^(notitie|note|notes|opmerking)$/.test(k))return "note";
+  return null}
+function yes(v){return v===true||/^(ja|j|yes|y|x|1|true|waar|✓)$/i.test(String(v??"").trim())}
+function ktOf(v){const t=normKey(v);return t==="s"||t==="snel"||t==="kort"?"snel":t==="m"||t==="medium"||t==="middel"?"medium":t==="l"||t==="lang"?"lang":""}
+function ingsOf(v){if(Array.isArray(v))return v.map(x=>String(x).trim()).filter(Boolean);const t=String(v??"");return (/[|\n]/.test(t)?t.split(/[|\n]/):t.split(",")).map(x=>x.trim()).filter(Boolean)}
+function parseCsv(text){
+  const first=text.split(/\r?\n/)[0]||"";const d=[";","\t",","].map(c=>[c,first.split(c).length]).sort((a,b)=>b[1]-a[1])[0][0];
+  const rows=[];let row=[],cell="",q=false;
+  for(let i=0;i<text.length;i++){const c=text[i];
+    if(q){if(c==='"'){if(text[i+1]==='"'){cell+='"';i++}else q=false}else cell+=c}
+    else if(c==='"')q=true;else if(c===d){row.push(cell);cell=""}
+    else if(c==="\n"||c==="\r"){if(c==="\r"&&text[i+1]==="\n")i++;row.push(cell);rows.push(row);row=[];cell=""}
+    else cell+=c}
+  if(cell||row.length){row.push(cell);rows.push(row)}
+  const nonEmpty=rows.filter(r=>r.some(c=>c.trim()));if(!nonEmpty.length)return [];
+  const head=nonEmpty[0].map(fieldOf);
+  if(!head.includes("name"))throw new Error("De eerste regel moet kolomnamen hebben, met minstens naam en ingredienten.");
+  return nonEmpty.slice(1).map(r=>{const o={};head.forEach((f,i)=>{if(f)o[f]=r[i]??""});return o});
+}
+function parseXml(text){
+  const doc=new DOMParser().parseFromString(text,"application/xml");if(doc.querySelector("parsererror"))throw new Error("Het XML-bestand is niet goed leesbaar.");
+  const txt=(el,n)=>{const x=el.getElementsByTagName(n)[0];return x?x.textContent:""};
+  return [...doc.getElementsByTagName("gerecht")].map(g=>({name:txt(g,"naam"),ingredients:[...g.getElementsByTagName("ingredient")].map(x=>x.textContent),kooktijd:txt(g,"kooktijd"),kind:txt(g,"kindvriendelijk"),peul:txt(g,"peulvruchten"),vries:txt(g,"invriesbaar"),note:txt(g,"notitie")}));
+}
+function parseJson(text){
+  let d=JSON.parse(text);if(!Array.isArray(d))d=d.gerechten||d.meals||[];if(!Array.isArray(d))return [];
+  return d.map(x=>{const o={};for(const [k,v] of Object.entries(x||{})){const f=fieldOf(k);if(f)o[f]=v}return o});
+}
+async function readImport(file){
+  const buf=await file.arrayBuffer();let text=new TextDecoder("utf-8").decode(buf);if(text.includes("\ufffd"))text=new TextDecoder("windows-1252").decode(buf);text=text.replace(/^\ufeff/,"");const t=text.trim();
+  const rows=t.startsWith("<")?parseXml(t):(t.startsWith("[")||t.startsWith("{"))?parseJson(t):parseCsv(text);
+  const seen=new Set([...meals.values()].map(m=>m.name.trim().toLowerCase()));
+  const add=[],dup=[],bad=[];
+  for(const r of rows){
+    const name=String(r.name??"").trim().slice(0,80);if(!name)continue;
+    const ingredients=ingsOf(r.ingredients).slice(0,60);
+    if(!ingredients.length){bad.push(name);continue}
+    const low=name.toLowerCase();if(seen.has(low)){dup.push(name);continue}seen.add(low);
+    add.push({name,ingredients,note:String(r.note??"").trim().slice(0,200),kooktijd:ktOf(r.kooktijd),kind:yes(r.kind),peul:yes(r.peul),vries:yes(r.vries)});
+  }
+  return {file:file.name,add,dup,bad};
+}
+function importBox(){
+  if(!canWrite)return "";
+  const st=importState;
+  const list=(arr)=>`<ul>${arr.slice(0,8).map(n=>`<li>${esc(n)}</li>`).join("")}${arr.length>8?`<li>en nog ${arr.length-8}</li>`:""}</ul>`;
+  return `<div class="importbox"><span class="eyebrow">Importeren uit bestand</span>
+    ${st&&st.error?`<p class="err">${esc(st.error)}</p>`:""}
+    ${st&&!st.error?`<div class="importsum"><strong>${esc(st.file)}</strong>
+      <span>${st.add.length} nieuwe ${st.add.length===1?"gerecht":"gerechten"} om toe te voegen.</span>${st.add.length?list(st.add.map(m=>m.name)):""}
+      ${st.dup.length?`<span class="sub">${st.dup.length} ${st.dup.length===1?"staat":"staan"} al in Gerechten en ${st.dup.length===1?"wordt":"worden"} overgeslagen.</span>${list(st.dup)}`:""}
+      ${st.bad.length?`<span class="sub">${st.bad.length} zonder ingrediënten, ${st.bad.length===1?"wordt":"worden"} overgeslagen.</span>${list(st.bad)}`:""}
+      <div class="actions">${st.add.length?`<button class="primary" data-act="impgo" ${busy?"disabled":""}>Ja, voeg ${st.add.length} toe</button>`:""}<button class="ghost" data-act="impcancel">Annuleer</button></div></div>`
+    :`<label for="impfile" class="sub">Kies een CSV-, XML- of JSON-bestand. Je ziet eerst wat er wordt toegevoegd.</label>
+      <input type="file" id="impfile" accept=".csv,.tsv,.txt,.xml,.json,text/csv,application/xml,application/json">
+      <details><summary>Welk formaat?</summary>
+        <p>Een CSV uit Excel of Numbers met op de eerste regel deze kolommen (puntkomma of komma als scheiding):</p>
+        <pre>${esc(IMPORT_EXAMPLE)}</pre>
+        <p>Ingrediënten scheid je met een | (of zet ze onder elkaar in één cel). Kooktijd is snel, medium of lang (of S, M, L). Kenmerken zijn ja of nee. Alleen naam en ingredienten zijn verplicht. Een XML-bestand uit de export hierboven werkt ook. Gerechten die al bestaan (zelfde naam) worden overgeslagen.</p>
+        ${downloads?'<button class="ghost small" data-act="imptemplate">Download voorbeeldbestand</button>':""}
+      </details>`}
+  </div>`;
+}
+async function runImport(){
+  const st=importState;if(!st||!st.add.length)return;
+  await guard(async()=>{
+    const now=Date.now();let n=0;
+    if(db.addMany)n=await db.addMany("meals",st.add.map((m,i)=>({...m,createdAt:now+i})));
+    else for(const m of st.add){await db.collection("meals").add({...m,createdAt:now+n});n++}
+    importState=null;toast(n+(n===1?" gerecht":" gerechten")+" toegevoegd");
+  });
+}
 function exportBar(which){
   return `<div class="exportbar"><span class="eyebrow">Exporteren als XML</span><div class="actions">
     ${downloads?`<button data-act="xmlsave" data-which="${which}">Bewaar als bestand</button>`:""}
@@ -651,8 +741,8 @@ function renderMeals(el){
   el.innerHTML=`<div class="row spread"><h2>Gerechten <span class="sub">(${filtering?list.length+" van "+meals.size:meals.size})</span></h2>${canWrite?'<button class="primary" data-act="newmeal">+ Nieuw</button>':""}</div>
     ${meals.size>5?`<input type="search" id="mealsearch" placeholder="Zoek op gerecht of ingrediënt" value="${esc(mealFilter.q)}">`:""}
     ${meals.size?filterBar("meals",mealFilter):""}
-    ${!mealsLoaded?'<p class="notice">Laden…</p>':!meals.size?'<div class="empty-state"><p>Nog geen gerechten. Voeg jullie favorieten toe; daaruit komen de voorstellen.</p></div>':
-    `<div class="list">${listHead(canWrite)}${list.map(([id,m])=>delConfirm===id?`<div class="itemrow confirming"><span><strong>Wil je ${esc(m.name)} echt verwijderen?</strong><span class="sub">Het verdwijnt uit Gerechten en uit toekomstige voorstellen.</span></span><span class="confirmdel"><button class="danger" data-act="rowdelyes" data-id="${esc(id)}" ${busy?"disabled":""}>Ja, verwijder</button><button class="ghost" data-act="rowdelno">Nee</button></span></div>`:`<div class="itemrow"><button class="item" data-act="edit" data-id="${esc(id)}">${itemText(m)}${propCols(m)}<span class="chev">›</span></button>${canWrite?`<button class="trash" data-act="rowdel" data-id="${esc(id)}" aria-label="Verwijder ${esc(m.name)}"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>`:""}</div>`).join("")||'<p class="notice" style="padding:14px">Niets gevonden.</p>'}</div>${exportBar("meals")}`}`;
+    ${!mealsLoaded?'<p class="notice">Laden…</p>':!meals.size?'<div class="empty-state"><p>Nog geen gerechten. Voeg jullie favorieten toe; daaruit komen de voorstellen.</p></div>'+importBox():
+    `<div class="list">${listHead(canWrite)}${list.map(([id,m])=>delConfirm===id?`<div class="itemrow confirming"><span><strong>Wil je ${esc(m.name)} echt verwijderen?</strong><span class="sub">Het verdwijnt uit Gerechten en uit toekomstige voorstellen.</span></span><span class="confirmdel"><button class="danger" data-act="rowdelyes" data-id="${esc(id)}" ${busy?"disabled":""}>Ja, verwijder</button><button class="ghost" data-act="rowdelno">Nee</button></span></div>`:`<div class="itemrow"><button class="item" data-act="edit" data-id="${esc(id)}">${itemText(m)}${propCols(m)}<span class="chev">›</span></button>${canWrite?`<button class="trash" data-act="rowdel" data-id="${esc(id)}" aria-label="Verwijder ${esc(m.name)}"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>`:""}</div>`).join("")||'<p class="notice" style="padding:14px">Niets gevonden.</p>'}</div>${exportBar("meals")}${importBox()}`}`;
 }
 
 let shopChecked={};try{shopChecked=JSON.parse(localStorage.getItem("mb-shop")||"{}")}catch(e){}
@@ -739,6 +829,9 @@ document.addEventListener("click",e=>{
   else if(a==="takesave")takeIdea(k,true);
   else if(a==="saveinsp")saveInspired(k);
   else if(a==="copyshop")copyShop();
+  else if(a==="impgo")runImport();
+  else if(a==="impcancel"){importState=null;render()}
+  else if(a==="imptemplate"){downloads.save({filename:"gerechten-voorbeeld.csv",data:"\ufeff"+IMPORT_EXAMPLE}).catch(()=>{})}
   else if(a==="xmlsave")xmlSave(b.dataset.which);
   else if(a==="xmlcopy")xmlCopy(b.dataset.which);
   else if(a==="signout"){if(window.firebase)firebase.auth().signOut()}
@@ -748,6 +841,10 @@ document.addEventListener("change",e=>{
   const t=e.target;
   if(t.dataset.shop){shopChecked[t.dataset.shop]=t.checked;if(!t.checked)delete shopChecked[t.dataset.shop];try{localStorage.setItem("mb-shop",JSON.stringify(shopChecked))}catch(e){}render()}
 });
+document.addEventListener("change",async e=>{const t=e.target;if(t.id!=="impfile"||!t.files||!t.files[0])return;
+  try{importState=await readImport(t.files[0]);if(!importState.add.length&&!importState.dup.length&&!importState.bad.length)importState={error:"Geen gerechten gevonden in dit bestand. Kijk bij Welk formaat?"}}
+  catch(err){importState={error:(err&&err.message&&!/JSON|Unexpected/.test(err.message)?err.message:"Dit bestand kon ik niet lezen. Kijk bij Welk formaat?")}}
+  render()});
 document.addEventListener("change",e=>{const t=e.target;if(t.getAttribute&&t.getAttribute("role")==="switch"){const y=t.parentElement.querySelector(".yn-label");if(y)y.textContent=t.checked?"Ja":"Nee"}});
 document.addEventListener("input",e=>{if(e.target.id==="mealsearch"){mealFilter.q=e.target.value;render()}else if(e.target.dataset&&e.target.dataset.pickq){pickFilter.q=e.target.value;render()}});
 document.addEventListener("submit",e=>{
@@ -787,7 +884,8 @@ function makeDb(fdb){return{
     onSnapshot:(next,err)=>ref.onSnapshot(q=>next({docs:q.docs.map(d=>({id:d.id,exists:true,data:()=>d.data()}))}),err),
     add:async d=>{const r=await ref.add(d);return{id:r.id}},
     doc:id=>wrapDoc(ref.doc(id))}},
-  doc:p=>wrapDoc(fdb.doc(p))}}
+  doc:p=>wrapDoc(fdb.doc(p)),
+  addMany:fdb.batch?async(name,docs)=>{const ref=fdb.collection(name);for(let i=0;i<docs.length;i+=400){const b=fdb.batch();for(const d of docs.slice(i,i+400))b.set(ref.doc(),d);await b.commit()}return docs.length}:null}}
 function showGate(html){const g=document.getElementById("gate");g.innerHTML=html;g.hidden=false;document.querySelector(".wrap").hidden=true;document.querySelector("nav").hidden=true}
 function hideGate(){document.getElementById("gate").hidden=true;document.querySelector(".wrap").hidden=false;document.querySelector("nav").hidden=false}
 const LOGO=document.querySelector(".logo").outerHTML;
@@ -809,7 +907,7 @@ let unsubs=[];
     try{await fdb.doc("users/"+uid).set({name:(u.displayName||"").split(" ")[0]||u.email,email:u.email||""},{merge:true})}
     catch(e){if(e&&e.code==="permission-denied"){showGate(`<div class="gatebox">${LOGO}<h1>Geen toegang</h1><p>${esc(u.email||"Dit account")} staat niet op de lijst van het huishouden. Vraag de beheerder om je toe te voegen, of log in met een ander account.</p><button id="logoutbtn">Ander account kiezen</button></div>`);document.getElementById("logoutbtn").onclick=()=>firebase.auth().signOut();return}}
     hideGate();live=true;canWrite=true;
-    downloads={save:async({filename,data})=>{const url=URL.createObjectURL(new Blob([data],{type:"application/xml"}));const a=document.createElement("a");a.href=url;a.download=filename.replace(/\.txt$/,"");document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000);return{status:"saved"}}};
+    downloads={save:async({filename,data})=>{const url=URL.createObjectURL(new Blob([data],{type:/\.csv$/.test(filename)?"text/csv;charset=utf-8":"application/xml"}));const a=document.createElement("a");a.href=url;a.download=filename.replace(/\.txt$/,"");document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000);return{status:"saved"}}};
     unsubs.push(db.collection("meals").onSnapshot(s=>{meals.clear();for(const d of s.docs){const x=d.data();meals.set(d.id,{name:String(x.name||"Naamloos"),ingredients:Array.isArray(x.ingredients)?x.ingredients.map(String):[],note:String(x.note||""),kooktijd:KTL[x.kooktijd]?String(x.kooktijd):"",kind:x.kind===true,peul:x.peul===true,vries:x.vries===true})}mealsLoaded=true;render();autoFill()},()=>{mealsLoaded=true;render()}));
     unsubs.push(db.collection("plan").onSnapshot(s=>{plan.clear();for(const d of s.docs)plan.set(d.id,d.data());planLoaded=true;render();autoFill();prune();resolveNames([...new Set([...plan.values()].map(p=>p.by))])},()=>{}));
     render();
