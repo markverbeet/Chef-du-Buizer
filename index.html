@@ -330,6 +330,7 @@ function pad(n){return String(n).padStart(2,"0")}
 function key(d){return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())}
 function windowDays(){const out=[];const t=new Date();t.setHours(12,0,0,0);for(let i=0;i<DAYS;i++){const d=new Date(t);d.setDate(t.getDate()+i);out.push(d)}return out}
 function dayLabel(d,i){return (i===0?"<b>Vandaag</b> · ":i===1?"<b>Morgen</b> · ":"")+WD[d.getDay()]+" "+d.getDate()+" "+MON[d.getMonth()]}
+function cap(t){t=String(t??"").trim();return /^ij/i.test(t)?"IJ"+t.slice(2):t.charAt(0).toLocaleUpperCase("nl")+t.slice(1)}
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2600)}
 function sortedMeals(){return [...meals.entries()].sort((a,b)=>a[1].name.localeCompare(b[1].name,"nl"))}
@@ -583,7 +584,7 @@ async function readImport(file){
   const add=[],dup=[],bad=[];
   for(const r of rows){
     const name=String(r.name??"").trim().slice(0,80);if(!name)continue;
-    const ingredients=ingsOf(r.ingredients).slice(0,60);
+    const ingredients=ingsOf(r.ingredients).map(cap).slice(0,60);
     if(!ingredients.length){bad.push(name);continue}
     const low=name.toLowerCase();if(seen.has(low)){dup.push(name);continue}seen.add(low);
     add.push({name,ingredients,note:String(r.note??"").trim().slice(0,200),kooktijd:ktOf(r.kooktijd),kind:yes(r.kind),peul:yes(r.peul),vries:yes(r.vries)});
@@ -670,7 +671,7 @@ function renderWeek(el){
       return;
     }
     const insp=p&&p.kind==="inspiratie";
-    const m=p&&p.mealId?meals.get(p.mealId):insp?{ingredients:Array.isArray(p.ingredients)?p.ingredients.map(String):[],note:p.why||"",kooktijd:KTL[p.kooktijd]?p.kooktijd:""}:null;
+    const m=p&&p.mealId?meals.get(p.mealId):insp?{ingredients:Array.isArray(p.ingredients)?p.ingredients.map(cap):[],note:p.why||"",kooktijd:KTL[p.kooktijd]?p.kooktijd:""}:null;
     const ings=m?m.ingredients:[];
     const pill=!p?'<span class="pill none">Voorstel volgt</span>':ok?'<span class="pill ok">Bevestigd</span>':no?'<span class="pill no">Afgewezen</span>':'<span class="pill prop">Voorstel</span>';
     const who=p&&p.by&&names[p.by]&&(ok||no)?`${ok?"Bevestigd":"Afgewezen"} door ${esc(names[p.by])}`:"";
@@ -753,7 +754,7 @@ let shopChecked={};try{shopChecked=JSON.parse(localStorage.getItem("mb-shop")||"
 function shopData(){
   const agg=new Map(),days=[];let pending=0;
   windowDays().forEach((d,i)=>{const p=plan.get(key(d));if(!p)return;if(p.status!=="ok"){pending++;return}
-    const m=p.mealId?meals.get(p.mealId):p.kind==="inspiratie"?{name:p.mealName,ingredients:Array.isArray(p.ingredients)?p.ingredients.map(String):[]}:null;if(!m)return;
+    const m=p.mealId?meals.get(p.mealId):p.kind==="inspiratie"?{name:p.mealName,ingredients:Array.isArray(p.ingredients)?p.ingredients.map(cap):[]}:null;if(!m)return;
     days.push({label:WD[d.getDay()]+" "+d.getDate()+" "+MON[d.getMonth()],name:m.name});
     for(const ing of m.ingredients){const k=ing.trim().toLowerCase();if(!k)continue;const e=agg.get(k)||{label:ing.trim(),meals:[]};e.meals.push(m.name);agg.set(k,e)}});
   return {items:[...agg.entries()].sort((a,b)=>a[0].localeCompare(b[0],"nl")),days,pending};
@@ -854,7 +855,7 @@ document.addEventListener("input",e=>{if(e.target.id==="mealsearch"){mealFilter.
 document.addEventListener("submit",e=>{
   if(e.target.id!=="mealform")return;e.preventDefault();
   const name=document.getElementById("f-name").value.trim();if(!name)return;
-  const ingredients=document.getElementById("f-ing").value.split("\n").map(s=>s.trim()).filter(Boolean);
+  const ingredients=document.getElementById("f-ing").value.split("\n").map(cap).filter(Boolean);
   const ingErr=document.getElementById("f-ing-err");
   if(!ingredients.length){ingErr.hidden=false;document.getElementById("f-ing").focus();return}
   ingErr.hidden=true;
@@ -912,7 +913,7 @@ let unsubs=[];
     catch(e){if(e&&e.code==="permission-denied"){showGate(`<div class="gatebox">${LOGO}<h1>Geen toegang</h1><p>${esc(u.email||"Dit account")} staat niet op de lijst van het huishouden. Vraag de beheerder om je toe te voegen, of log in met een ander account.</p><button id="logoutbtn">Ander account kiezen</button></div>`);document.getElementById("logoutbtn").onclick=()=>firebase.auth().signOut();return}}
     hideGate();live=true;canWrite=true;
     downloads={save:async({filename,data})=>{const url=URL.createObjectURL(new Blob([data],{type:/\.csv$/.test(filename)?"text/csv;charset=utf-8":"application/xml"}));const a=document.createElement("a");a.href=url;a.download=filename.replace(/\.txt$/,"");document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000);return{status:"saved"}}};
-    unsubs.push(db.collection("meals").onSnapshot(s=>{meals.clear();for(const d of s.docs){const x=d.data();meals.set(d.id,{name:String(x.name||"Naamloos"),ingredients:Array.isArray(x.ingredients)?x.ingredients.map(String):[],note:String(x.note||""),kooktijd:KTL[x.kooktijd]?String(x.kooktijd):"",kind:x.kind===true,peul:x.peul===true,vries:x.vries===true})}mealsLoaded=true;render();autoFill()},()=>{mealsLoaded=true;render()}));
+    unsubs.push(db.collection("meals").onSnapshot(s=>{meals.clear();for(const d of s.docs){const x=d.data();meals.set(d.id,{name:String(x.name||"Naamloos"),ingredients:Array.isArray(x.ingredients)?x.ingredients.map(cap).filter(Boolean):[],note:String(x.note||""),kooktijd:KTL[x.kooktijd]?String(x.kooktijd):"",kind:x.kind===true,peul:x.peul===true,vries:x.vries===true})}mealsLoaded=true;render();autoFill()},()=>{mealsLoaded=true;render()}));
     unsubs.push(db.collection("plan").onSnapshot(s=>{plan.clear();for(const d of s.docs)plan.set(d.id,d.data());planLoaded=true;render();autoFill();prune();resolveNames([...new Set([...plan.values()].map(p=>p.by))])},()=>{}));
     render();
   });
